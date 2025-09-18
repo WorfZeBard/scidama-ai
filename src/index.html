@@ -1,125 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scidama Online</title>
-    <link rel="stylesheet" href="styles.css">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sci-Damath Offline</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1 id="game-title">Sci-Damath Offline</h1>
+    </header>
 
-    <!--<script defer src="https://dashboard.render.com/socket.io/socket.io.js"></script>-->
-    <script defer src="https://cdn.socket.io/4.1.2/socket.io.min.js"></script>
-    <script defer src="pieces.js"></script>
-    <script defer src="app.js"></script>
+    <!-- Main Layout -->
+    <main class="game-container">
+      <!-- Left Sidebar (Scores + Timers) -->
+      <aside class="sidebar left-sidebar" aria-label="Game stats">
+        <!-- Scores -->
+        <section class="scoreboard" aria-label="Scoreboard">
+          <div class="score red">
+            <h3>Red Score</h3>
+            <span id="red-score">0</span>
+          </div>
+          <div class="score blue">
+            <h3>Blue Score</h3>
+            <span id="blue-score">0</span>
+          </div>
+        </section>
 
-</head>
-<body>
+        <!-- Timers -->
+        <section class="timers" aria-label="Timers">
+          <div class="timer-wrapper">
+            <span class="timer-label">Session:</span>
+            <span id="session-time">20:00</span>
+          </div>
+          <div class="timer-wrapper">
+            <span class="timer-label">Round:</span>
+            <span id="round-time">1:00</span>
+          </div>
+          <div class="current-player-label">
+            Current Player: <span id="player">red</span>
+          </div>
+        </section>
+      </aside>
 
-    
-    <form id="room-form" autocomplete="off">
-        <h3>Scidama Online</h3>
-        <div id="text-box">
-            <input type="text" class="text-box" id="name-input" placeholder="Enter your name">
-            <input type="text" class="text-box" id="room-input" placeholder="Enter room ID">
-        </div>
-        <div id="button-box">
-            <button type="submit" class="room-button" id="create-button">Create room</button>
-            <button type="submit" class="room-button" id="find-button">Join room</button>
-        </div>
-        <div id="notif"></div>
-    </form>
-    
-    
+      <!-- Gameboard -->
+      <section id="gameboard" role="main" aria-label="Gameboard"></section>
 
-    <div id="game-container">
+      <!-- Right Sidebar (Move History) -->
+      <aside class="sidebar right-sidebar" aria-label="Move history">
+        <section id="move-history">
+          <h3>Move History</h3>
+          <ul id="move-history-content" aria-live="polite"></ul>
+        </section>
+      </aside>
+    </main>
 
-        <div id="top-info">
-            <p>It is <span id="player"></span>'s turn.</p>
-            <p id="opponent">Waiting for players...</p>
-        </div>
-        <div id="body-content">
-            <div class="y-coordinates">
-                <!-- <div class="coordinates-height">7</div>
-                <div class="coordinates-height">6</div>
-                <div class="coordinates-height">5</div>
-                <div class="coordinates-height">4</div>
-                <div class="coordinates-height">3</div>
-                <div class="coordinates-height">2</div>
-                <div class="coordinates-height">1</div>
-                <div class="coordinates-height">0</div> -->
-            </div>
-
-
-            <div id="gameboard"></div>
-            <div id="score-board">
-                <div id="player-score">
-                    <div id="blue-score-board"><span class="blue-score score">0</span></div>
-                    <div id="red-score-board"><span class="red-score score">0</span></div>
-                </div>
-                <div id="move-history">
-                    <div id="move-history-content">
-                        <div style="width: 100%; background-color: #888383;;">-------------History-------------</div>
-                        <!-- Your move history text goes here -->
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-        <div class="x-coordinates">
-            <!-- <div class="coordinates-width">0</div>
-            <div class="coordinates-width">1</div>
-            <div class="coordinates-width">2</div>
-            <div class="coordinates-width">3</div>
-            <div class="coordinates-width">4</div>
-            <div class="coordinates-width">5</div>
-            <div class="coordinates-width">6</div>
-            <div class="coordinates-width">7</div> -->
-        </div>
-
-        <div class="bottom-div">
-            <div class="game-time">
-                <div id="session-time">20:00</div>
-                <div>|</div>
-                <div id="round-time">:60</div>
-            </div>
-
-            <div>
-                <p id="info-display"></p>
-            </div>
-        </div>
+    <!-- Sound Effects -->
+    <div id="sounds">
+      <audio
+        id="move-promotion001"
+        src="assets/move-promotion001.mp3"
+        preload="auto"
+      ></audio>
     </div>
 
-    <!--Winning Condition wahahahahaha-->
-    <div class="modal-red-wins">
-        <div class="modal-content">
-            <center><img src="../../assets/img/scidama.png" alt="ez"></center>
-            <center><h1>RED WINS!</h1></center>
-            <button class="rematch">Rematch</button>
-            <a href="../../index.html"><button class="exit">Exit</button></a>
-        </div>
-    </div>
-
-    <div class="modal-blue-wins">
-        <div class="modal-content">
-            <center><img src="../../assets/img/scidama.png" alt="ez"></center>
-            <center><h1>BLUE WINS!</h1></center>
-            <center><p></p></center>
-            <button class="rematch">Rematch</button>
-            <a href="../../index.html"><button class="exit">Exit</button></a>
-        </div>
-    </div>
-
-    
-    <audio id="move-attack001" autoplay="false" src="assets/sfx/move_attack001.mp3"></audio>
-
-   <audio id="move-attackcombo001" autoplay="false" src="assets/sfx/move_attackcombo001.mp3"></audio>
-
-    <audio id="move-king001" autoplay="false" src="assets/sfx/move_king001.mp3"></audio>
-    <audio id="move-kingattack001" autoplay="false" src="assets/sfx/move_kingattack001.mp3"></audio>
-
-    <audio id="move-illegal001" autoplay="false" src="assets/sfx/move_illegal001.mp3"></audio>
-    <audio id="move-promotion001" autoplay="false" src="assets/sfx/move_promotion001.mp3"></audio>
-    <!-- <audio id="endgame_lose001" autoplay="false" src="assets/sfx/endgame_lose001.mp3"></audio> -->
-    <audio id="endgame_win001" autoplay="false" src="assets/sfx/endgame_win001.mp3"></audio>
-</body>
+    <!-- Scripts -->
+    <script src="pieces.js"></script>
+    <script src="app.js"></script>
+  </body>
 </html>

@@ -1,29 +1,42 @@
-const bchip = '<div class="piece" id="bchip"><img src="assets/blue_chip/bchip.png"></img></div>'
-const bkwh3 = '<div class="piece" id="bkwh3"><img src="assets/blue_chip/bkwh3.png"></img></div>'
-const bp6 = '<div class="piece" id="bp6"><img src="assets/blue_chip/bp6.png"></img></div>'
-const bkwh9 = '<div class="piece" id="bkwh9"><img src="assets/blue_chip/bkwh9.png"></img></div>'
-const bp12 = '<div class="piece" id="bp12"><img src="assets/blue_chip/bp12.png"></img></div>'
-const bp8 = '<div class="piece" id="bp8"><img src="assets/blue_chip/bp8.png"></img></div>'
-const bkwh11 = '<div class="piece" id="bkwh11"><img src="assets/blue_chip/bkwh11.png"></img></div>'
-const bp4 = '<div class="piece" id="bp4"><img src="assets/blue_chip/bp4.png"></img></div>'
-const bkwh1 = '<div class="piece" id="bkwh1"><img src="assets/blue_chip/bkwh1.png"></img></div>'
-const bkwh5 = '<div class="piece" id="bkwh5"><img src="assets/blue_chip/bkwh5.png"></img></div>'
-const bp2 = '<div class="piece" id="bp2"><img src="assets/blue_chip/bp2.png"></img></div>'
-const bkwh7 = '<div class="piece" id="bkwh7"><img src="assets/blue_chip/bkwh7.png"></img></div>'
-const bp10 = '<div class="piece" id="bp10"><img src="assets/blue_chip/bp10.png"></img></div>'
+// ================== PIECE DEFINITIONS ==================
+const PIECES = {
+  rchip: { color: "red", image: "assets/red_chip/rchip.png", value: 1 },
+  bchip: { color: "blue", image: "assets/blue_chip/bchip.png", value: 1 },
+};
 
-const rp10 = '<div class="piece" id="rp10"><img src="assets/red_chip/rp10.png"></img></div>'
-const rkwh7 = '<div class="piece" id="rkwh7"><img src="assets/red_chip/rkwh7.png"></img></div>'
-const rp2 = '<div class="piece" id="rp2"><img src="assets/red_chip/rp2.png"></img></div>'
-const rkwh5 = '<div class="piece" id="rkwh5"><img src="assets/red_chip/rkwh5.png"></img></div>'
-const rkwh1 = '<div class="piece" id="rkwh1"><img src="assets/red_chip/rkwh1.png"></img></div>'
-const rp4 = '<div class="piece" id="rp4"><img src="assets/red_chip/rp4.png"></img></div>'
-const rkwh11 = '<div class="piece" id="rkwh11"><img src="assets/red_chip/rkwh11.png"></img></div>'
-const rp8 = '<div class="piece" id="rp8"><img src="assets/red_chip/rp8.png"></img></div>'
-const rkwh3 = '<div class="piece" id="rkwh3"><img src="assets/red_chip/rkwh3.png"></img></div>'
-const rp6 = '<div class="piece" id="rp6"><img src="assets/red_chip/rp6.png"></img></div>'
-const rkwh9 = '<div class="piece" id="rkwh9"><img src="assets/red_chip/rkwh9.png"></img></div>'
-const rp12 = '<div class="piece" id="rp12"><img src="assets/red_chip/rp12.png"></img></div>'
+// ================== INITIAL BOARD SETUP ==================
+const INITIAL_SETUP = {};
 
+// Place Blue pieces (rows 0–2) → light squares
+for (let row = 0; row < 3; row++) {
+  for (let col = 0; col < 8; col++) {
+    if ((row + col) % 2 === 0) {
+      INITIAL_SETUP[`${row},${col}`] = "bchip";
+    }
+  }
+}
 
+// Place Red pieces (rows 5–7) → light squares
+for (let row = 5; row < 8; row++) {
+  for (let col = 0; col < 8; col++) {
+    if ((row + col) % 2 === 0) {
+      INITIAL_SETUP[`${row},${col}`] = "rchip";
+    }
+  }
+}
 
+// ================== DAMATH BOARD SYMBOLS ==================
+const DAMATH_LAYOUT = [
+  ["x", "", "÷", "", "-", "", "+", ""],
+  ["", "÷", "", "x", "", "+", "", "-"],
+  ["-", "", "+", "", "x", "", "÷", ""],
+  ["", "+", "", "-", "", "÷", "", "x"],
+  ["x", "", "÷", "", "-", "", "+", ""],
+  ["", "÷", "", "x", "", "+", "", "-"],
+  ["-", "", "+", "", "x", "", "÷", ""],
+  ["", "+", "", "-", "", "÷", "", "x"]
+];
+
+function getMathSymbol(row, col) {
+  return DAMATH_LAYOUT[row][col];
+}
