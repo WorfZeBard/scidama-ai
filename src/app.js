@@ -24,6 +24,54 @@ const sessionEl = document.getElementById("session-time");
 const roundEl = document.getElementById("round-time");
 
 
+// ================== PIECE DEFINITIONS ==================
+const PIECES = {
+  // Red pieces
+  r1: { color: "red", value: 1 },
+  r2: { color: "red", value: 2 },
+  r3: { color: "red", value: 3 },
+  r4: { color: "red", value: 3 },
+  r5: { color: "red", value: 3 },
+  r6: { color: "red", value: 3 },
+  r7: { color: "red", value: 3 },
+  r8: { color: "red", value: 3 },
+  r9: { color: "red", value: 3 },
+  r10: { color: "red", value: 3 },
+  r11: { color: "red", value: 3 },
+  r12: { color: "red", value: 3 },
+  // Blue pieces
+  b1: { color: "blue", value: 1 },
+  b2: { color: "blue", value: 2 },
+  b3: { color: "blue", value: 3 },
+  b4: { color: "blue", value: 3 },
+  b5: { color: "blue", value: 3 },
+  b6: { color: "blue", value: 3 },
+  b7: { color: "blue", value: 3 },
+  b8: { color: "blue", value: 3 },
+  b9: { color: "blue", value: 3 },
+  b10: { color: "blue", value: 3 },
+  b11: { color: "blue", value: 3 },
+  b12: { color: "blue", value: 3 },
+  // ... add all pieces you need
+};
+
+// ================== DAMATH BOARD SYMBOLS ==================
+const DAMATH_LAYOUT = [
+  ["x", "", "÷", "", "-", "", "+", ""],
+  ["", "÷", "", "x", "", "+", "", "-"],
+  ["-", "", "+", "", "x", "", "÷", ""],
+  ["", "+", "", "-", "", "÷", "", "x"],
+  ["x", "", "÷", "", "-", "", "+", ""],
+  ["", "÷", "", "x", "", "+", "", "-"],
+  ["-", "", "+", "", "x", "", "÷", ""],
+  ["", "+", "", "-", "", "÷", "", "x"]
+];
+
+function getMathSymbol(row, col) {
+  return DAMATH_LAYOUT[row][col];
+}
+
+
 // ================== BOARD GENERATION ==================
 for (let row = 0; row < 8; row++) {
   for (let col = 0; col < 8; col++) {
@@ -60,15 +108,12 @@ function placeInitialPieces() {
     piece.setAttribute("tabindex", "0");
     piece.draggable = true;
 
-    // Store value
-    piece.dataset.value = pieceData.value;
+    // Add a number label in the center
+    const numberLabel = document.createElement("span");
+    numberLabel.classList.add("piece-number");
+    numberLabel.textContent = pieceData.value;
 
-    const img = document.createElement("img");
-    img.src = pieceData.image; // must match your folder/file exactly
-    img.alt = pieceKey;
-    piece.appendChild(img);
-
-
+    piece.appendChild(numberLabel);
     square.appendChild(piece);
   }
 }

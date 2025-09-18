@@ -434,3 +434,35 @@ button:focus {
     text-shadow: 0 0 8px #f39c12, 0 0 12px #f1c40f;
     font-weight: bold;
 }
+
+.piece {
+    width: 80%;
+    height: 80%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+    position: relative;
+    z-index: 1;
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: #fff;
+}
+
+.piece.red {
+    background: linear-gradient(145deg, #e57373, #c62828);
+    border: 2px solid #8b1e1e;
+}
+
+.piece.blue {
+    background: linear-gradient(145deg, #64b5f6, #1565c0);
+    border: 2px solid #0d3a66;
+}
+
+.piece-number {
+    pointer-events: none;
+    z-index: 2;
+    font-size: 1.2rem;
+}
