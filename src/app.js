@@ -23,6 +23,38 @@ let debugMode = false; // Debug mode toggle
 // Chain capture state
 let mustCaptureWithPiece = null;
 
+// ================== Helper Functions ==================
+function calculateSciDamathScore(capturingValue, operator, capturedValue) {
+  let result;
+  switch (operator.trim()) {
+    case "+":
+      result = capturingValue + capturedValue;
+      break;
+    case "-":
+      result = capturingValue - capturedValue;
+      break;
+    case "x": // Note: your layout uses "x", not "*"
+    case "×": // Also support multiplication symbol
+    case "*": // Supports another multiplication symbol
+      result = capturingValue * capturedValue;
+      break;
+    case "÷":
+    case "/":
+      if (capturedValue === 0) {
+        // Handle division by zero (Sci-Damath rule: often = 0 or invalid)
+        console.warn("Division by zero in Sci-Damath! Treating as 0.");
+        result = 0;
+      } else {
+        result = Math.round((capturingValue / capturedValue) * 100) / 100; // Round to 2 decimals
+      }
+      break;
+    default:
+      console.error("Unknown operator:", operator);
+      result = 0;
+  }
+  return result;
+}
+
 // ================== INITIAL SETUP (on LIGHT squares only) ==================
 let INITIAL_SETUP = {
   // Blue pieces (top)
@@ -389,6 +421,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   const isKing = piece.classList.contains("king");
   const color = piece.classList.contains("red") ? "red" : "blue";
 
+  // === CAPTURE DETECTION ===
   if (isKing) {
     capturedPieces = findCapturedPieces(
       startRow,
@@ -398,43 +431,71 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       color
     );
   } else {
-    if (Math.abs(endRow - startRow) === 2) {
+    // Regular piece: check if it's a 2-square jump (capture)
+    if (
+      Math.abs(endRow - startRow) === 2 &&
+      Math.abs(endCol - startCol) === 2
+    ) {
       const midRow = (startRow + endRow) / 2;
       const midCol = (startCol + endCol) / 2;
       const midPiece = document.querySelector(
         `.square[data-row='${midRow}'][data-col='${midCol}'] .piece`
       );
-      if (midPiece) capturedPieces.push(midPiece);
+      if (midPiece) {
+        capturedPieces.push(midPiece);
+      }
     }
   }
 
-  // Remove captured pieces and update score
-  capturedPieces.forEach((capturedPiece) => {
-    const capturedValue = parseInt(capturedPiece.dataset.value, 10);
-    capturedPiece.remove();
+  // === SCI-DAMATH SCORING ===
+  if (capturedPieces.length > 0) {
+    const capturingValue = parseInt(piece.dataset.value, 10);
+    const operator = getMathSymbol(endRow, endCol); // Operator on LANDING square
+    const capturedValue = parseInt(capturedPieces[0].dataset.value, 10); // Only one capture per jump
 
-    if (color === "red") redScore += capturedValue;
-    else blueScore += capturedValue;
-  });
+    const scoreChange = calculateSciDamathScore(
+      capturingValue,
+      operator,
+      capturedValue
+    );
 
-  redScoreEl.textContent = redScore;
-  blueScoreEl.textContent = blueScore;
+    // Add to current player's score
+    if (color === "red") {
+      redScore += scoreChange;
+    } else {
+      blueScore += scoreChange;
+    }
 
-  // Move piece
+    // Update UI
+    redScoreEl.textContent = redScore;
+    blueScoreEl.textContent = blueScore;
+
+    // Optional: Log for debugging
+    if (debugMode) {
+      console.log(
+        `${color.toUpperCase()} CAPTURE: (${capturingValue}) ${operator} (${capturedValue}) = ${scoreChange}`
+      );
+    }
+
+    // Remove captured pieces
+    capturedPieces.forEach((p) => p.remove());
+  }
+
+  // === MOVE THE PIECE ===
   endSquare.appendChild(piece);
 
-  // Handle chain capture
+  // === CHAIN CAPTURE LOGIC ===
   if (
     capturedPieces.length > 0 &&
     checkForChainCapture(piece, endRow, endCol)
   ) {
-    mustCaptureWithPiece = piece;
+    mustCaptureWithPiece = piece; // Same piece must continue
   } else {
     mustCaptureWithPiece = null;
     switchTurn();
   }
 
-  // King promotion
+  // === KING PROMOTION ===
   if (!isKing) {
     if (color === "red" && endRow === 0) {
       makeKing(piece, "assets/red_crown.png");
@@ -444,10 +505,11 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     }
   }
 
+  // === VISUAL FEEDBACK ===
   highlightSquareSymbol(endRow, endCol);
   clearValidMoves();
 
-  // Start timers on first move
+  // === START TIMERS ON FIRST MOVE ===
   if (!timersStarted) {
     timersStarted = true;
     startSessionTimer();

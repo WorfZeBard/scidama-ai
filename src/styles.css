@@ -292,6 +292,11 @@ h1 {
     color: rgba(0, 0, 0, 0.25);
     pointer-events: none;
     z-index: 0;
+    /* Prevent text selection */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }
 
 .symbol.highlight {
