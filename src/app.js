@@ -18,6 +18,7 @@ let sessionInterval;
 let roundInterval;
 
 let timersStarted = false;
+let debugMode = false; // Debug mode toggle
 
 let INITIAL_SETUP = {
   "0,0": "b1",
@@ -45,6 +46,19 @@ let INITIAL_SETUP = {
   "7,5": "r11",
   "7,7": "r12",
   // add all initial pieces you want
+};
+
+// ================== DEBUG SETUP ==================
+let DEBUG_SETUP = {
+  // Place kings on both sides for easy testing
+  "1,1": "r1", // Red king in middle
+  "1,3": "r2", // Red piece nearby
+  "2,2": "r3", // Red piece for capture testing
+  "6,6": "b1", // Blue king in middle  
+  "6,4": "b2", // Blue piece nearby
+  "5,5": "b3", // Blue piece for capture testing
+  "3,3": "r4", // Red piece in center for testing
+  "4,4": "b4", // Blue piece in center for testing
 };
 
 const sessionEl = document.getElementById("session-time");
@@ -118,9 +132,14 @@ for (let row = 0; row < 8; row++) {
 
 // ================== PLACE INITIAL PIECES ==================
 function placeInitialPieces() {
-  for (const pos in INITIAL_SETUP) {
+  // Clear existing pieces first
+  document.querySelectorAll(".piece").forEach(piece => piece.remove());
+  
+  const setup = debugMode ? DEBUG_SETUP : INITIAL_SETUP;
+  
+  for (const pos in setup) {
     const [row, col] = pos.split(",").map(Number);
-    const pieceKey = INITIAL_SETUP[pos];
+    const pieceKey = setup[pos];
     const pieceData = PIECES[pieceKey];
     if (!pieceData) continue;
 
@@ -145,6 +164,33 @@ function placeInitialPieces() {
     piece.appendChild(numberLabel);
     square.appendChild(piece);
   }
+  
+  // In debug mode, make specific pieces kings for testing
+  if (debugMode) {
+    makeDebugKings();
+  }
+}
+
+// ================== DEBUG KINGS ==================
+function makeDebugKings() {
+  // Make red piece at (1,1) a king
+  const redKingSquare = document.querySelector(`.square[data-row='1'][data-col='1']`);
+  const redKingPiece = redKingSquare?.querySelector('.piece.red');
+  if (redKingPiece && !redKingPiece.classList.contains('king')) {
+    makeKing(redKingPiece, "assets/red_crown.png");
+    console.log('Debug: Made red piece at (1,1) a king');
+  }
+  
+  // Make blue piece at (6,6) a king  
+  const blueKingSquare = document.querySelector(`.square[data-row='6'][data-col='6']`);
+  const blueKingPiece = blueKingSquare?.querySelector('.piece.blue');
+  if (blueKingPiece && !blueKingPiece.classList.contains('king')) {
+    makeKing(blueKingPiece, "assets/blue_crown.png");
+    console.log('Debug: Made blue piece at (6,6) a king');
+  }
+  
+  console.log('Debug setup complete - Kings are ready for testing!');
+  console.log('Red king at (1,1), Blue king at (6,6)');
 }
 
 // ================== HIGHLIGHT MATH SYMBOL ==================
@@ -202,6 +248,11 @@ function isValidMove(piece, startRow, startCol, endRow, endCol) {
   const color = piece.classList.contains("red") ? "red" : "blue";
   const isKing = piece.classList.contains("king");
 
+  // Debug logging
+  if (debugMode && isKing) {
+    console.log(`King move attempt: (${startRow},${startCol}) -> (${endRow},${endCol}), rowDiff: ${rowDiff}, colDiff: ${colDiff}`);
+  }
+
   // Forward movement only (unless king)
   if (!isKing) {
     if (color === "red" && rowDiff >= 0) return false; // red moves up (decreasing row)
@@ -210,6 +261,7 @@ function isValidMove(piece, startRow, startCol, endRow, endCol) {
 
   // Only allow diagonal by 1
   if (Math.abs(rowDiff) === 1 && colDiff === 1) {
+    if (debugMode && isKing) console.log('Valid king move: diagonal by 1');
     return true;
   }
 
@@ -227,10 +279,12 @@ function isValidMove(piece, startRow, startCol, endRow, endCol) {
       !midPiece.classList.contains(color) &&
       !targetSquare.querySelector(".piece")
     ) {
+      if (debugMode && isKing) console.log('Valid king capture move');
       return true;
     }
   }
 
+  if (debugMode && isKing) console.log('Invalid king move');
   return false;
 }
 
@@ -270,20 +324,12 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
 
   // Red reaches row 0 → king
   if (color === "red" && endRow === 0 && !piece.classList.contains("king")) {
-    piece.classList.add("king");
-    const kingImg = document.createElement("div");
-    kingImg.classList.add("king-image");
-    kingImg.textContent = "♛"; // You can use a small crown icon or image
-    piece.appendChild(kingImg);
+    makeKing(piece, "assets/red_crown.png");
   }
 
   // Blue reaches row 7 → king
   if (color === "blue" && endRow === 7 && !piece.classList.contains("king")) {
-    piece.classList.add("king");
-    const kingImg = document.createElement("div");
-    kingImg.classList.add("king-image");
-    kingImg.textContent = "♛";
-    piece.appendChild(kingImg);
+    makeKing(piece, "assets/blue_crown.png");
   }
 
   highlightSquareSymbol(endRow, endCol);
@@ -293,15 +339,16 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   function makeKing(piece, kingImgSrc) {
     piece.classList.add("king");
 
-    // Remove old piece image
-    const oldImg = piece.querySelector("img");
-    if (oldImg) oldImg.remove();
+    // Remove old king image if it exists
+    const oldKingImg = piece.querySelector(".king-image");
+    if (oldKingImg) oldKingImg.remove();
 
-    // Add king PNG
-    const img = document.createElement("img");
-    img.src = kingImgSrc;
-    img.classList.add("king-image");
-    piece.appendChild(img);
+    // Add king crown image
+    const kingImg = document.createElement("img");
+    kingImg.src = kingImgSrc;
+    kingImg.classList.add("king-image");
+    kingImg.alt = "King";
+    piece.appendChild(kingImg);
   }
 
   // ===== START TIMERS ON FIRST MOVE =====
@@ -346,6 +393,13 @@ gameboard.addEventListener("click", (e) => {
     if (selectedPiece) selectedPiece.classList.remove("selected");
     selectedPiece = piece;
     selectedPiece.classList.add("selected");
+    
+    // Show valid moves for debugging
+    const startSquare = selectedPiece.parentElement;
+    const startRow = parseInt(startSquare.dataset.row);
+    const startCol = parseInt(startSquare.dataset.col);
+    showValidMoves(selectedPiece, startRow, startCol);
+    
     return;
   }
 
@@ -458,6 +512,70 @@ function updateTimerDisplay() {
 }
 
 
+// ================== DEBUG CONTROLS ==================
+function setupDebugControls() {
+  const debugToggle = document.getElementById('debug-toggle');
+  const resetBoard = document.getElementById('reset-board');
+  
+  debugToggle.addEventListener('click', () => {
+    debugMode = !debugMode;
+    debugToggle.textContent = `Debug Mode: ${debugMode ? 'ON' : 'OFF'}`;
+    debugToggle.style.background = debugMode ? '#51cf66' : '#ff6b6b';
+    
+    // Reset scores and timers when switching modes
+    redScore = 0;
+    blueScore = 0;
+    redScoreEl.textContent = redScore;
+    blueScoreEl.textContent = blueScore;
+    currentPlayer = "red";
+    document.getElementById("player").textContent = currentPlayer;
+    
+    // Clear timers
+    if (sessionInterval) clearInterval(sessionInterval);
+    if (roundInterval) clearInterval(roundInterval);
+    timersStarted = false;
+    
+    // Reset timer displays
+    sessionMinutes = 20;
+    sessionSeconds = 0;
+    roundMinutes = 1;
+    roundSeconds = 0;
+    updateTimerDisplay();
+    
+    // Reload board with new setup
+    placeInitialPieces();
+    
+    console.log(`Debug mode ${debugMode ? 'enabled' : 'disabled'}`);
+  });
+  
+  resetBoard.addEventListener('click', () => {
+    // Reset scores and timers
+    redScore = 0;
+    blueScore = 0;
+    redScoreEl.textContent = redScore;
+    blueScoreEl.textContent = blueScore;
+    currentPlayer = "red";
+    document.getElementById("player").textContent = currentPlayer;
+    
+    // Clear timers
+    if (sessionInterval) clearInterval(sessionInterval);
+    if (roundInterval) clearInterval(roundInterval);
+    timersStarted = false;
+    
+    // Reset timer displays
+    sessionMinutes = 20;
+    sessionSeconds = 0;
+    roundMinutes = 1;
+    roundSeconds = 0;
+    updateTimerDisplay();
+    
+    // Reload board
+    placeInitialPieces();
+    
+    console.log('Board reset');
+  });
+}
+
 // ================== INIT ==================
+setupDebugControls();
 placeInitialPieces();
-createBoard();
