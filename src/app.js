@@ -55,6 +55,48 @@ function calculateSciDamathScore(capturingValue, operator, capturedValue) {
   return result;
 }
 
+function logMove(moveData) {
+  const historyList = document.getElementById("move-history-content");
+  const scrollableContainer = document.querySelector(".move-history-scrollable");
+  
+  if (!historyList || !scrollableContainer) return;
+
+  const moveItem = document.createElement("li");
+  moveItem.className = `move-item ${moveData.player}`;
+
+  let moveText = "";
+
+  if (moveData.type === "capture") {
+    moveText = `
+      <strong>${moveData.player.toUpperCase()}</strong>: 
+      ${moveData.piece}(${moveData.capturingValue}) 
+      <span class="operator">${moveData.operator}</span> 
+      (${moveData.capturedValue}) = 
+      <span class="result ${moveData.result >= 0 ? "positive" : "negative"}">
+        ${moveData.result}
+      </span>
+    `;
+  } else if (moveData.type === "move") {
+    moveText = `
+      <strong>${moveData.player.toUpperCase()}</strong>: 
+      ${moveData.piece}(${moveData.value}) moved to (${moveData.endRow},${
+      moveData.endCol
+    })
+    `;
+  } else if (moveData.type === "promotion") {
+    moveText = `
+      <strong>${moveData.player.toUpperCase()}</strong>: 
+      ${moveData.piece} promoted to DAMA!
+    `;
+  }
+
+  moveItem.innerHTML = moveText;
+  historyList.appendChild(moveItem);
+  
+  // 🔥 Scroll the scrollable container to bottom
+  scrollableContainer.scrollTop = scrollableContainer.scrollHeight;
+}
+
 // ================== INITIAL SETUP (on LIGHT squares only) ==================
 let INITIAL_SETUP = {
   // Blue pieces (top)
@@ -420,6 +462,10 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   let capturedPieces = [];
   const isKing = piece.classList.contains("king");
   const color = piece.classList.contains("red") ? "red" : "blue";
+  const pieceKey =
+    Array.from(piece.classList).find((cls) => cls.match(/^[rb]\d+$/)) ||
+    "piece";
+  const pieceValue = parseInt(piece.dataset.value, 10);
 
   // === CAPTURE DETECTION ===
   if (isKing) {
@@ -431,7 +477,6 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       color
     );
   } else {
-    // Regular piece: check if it's a 2-square jump (capture)
     if (
       Math.abs(endRow - startRow) === 2 &&
       Math.abs(endCol - startCol) === 2
@@ -447,38 +492,47 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     }
   }
 
+  let scoreChange = 0;
+  let operator = "";
+  let capturedValue = 0;
+
   // === SCI-DAMATH SCORING ===
   if (capturedPieces.length > 0) {
-    const capturingValue = parseInt(piece.dataset.value, 10);
-    const operator = getMathSymbol(endRow, endCol); // Operator on LANDING square
-    const capturedValue = parseInt(capturedPieces[0].dataset.value, 10); // Only one capture per jump
+    operator = getMathSymbol(endRow, endCol);
+    capturedValue = parseInt(capturedPieces[0].dataset.value, 10);
+    scoreChange = calculateSciDamathScore(pieceValue, operator, capturedValue);
 
-    const scoreChange = calculateSciDamathScore(
-      capturingValue,
-      operator,
-      capturedValue
-    );
-
-    // Add to current player's score
     if (color === "red") {
       redScore += scoreChange;
     } else {
       blueScore += scoreChange;
     }
 
-    // Update UI
     redScoreEl.textContent = redScore;
     blueScoreEl.textContent = blueScore;
 
-    // Optional: Log for debugging
-    if (debugMode) {
-      console.log(
-        `${color.toUpperCase()} CAPTURE: (${capturingValue}) ${operator} (${capturedValue}) = ${scoreChange}`
-      );
-    }
+    // Log capture move
+    logMove({
+      type: "capture",
+      player: color,
+      piece: pieceKey,
+      capturingValue: pieceValue,
+      operator: operator,
+      capturedValue: capturedValue,
+      result: scoreChange,
+    });
 
-    // Remove captured pieces
     capturedPieces.forEach((p) => p.remove());
+  } else {
+    // Log regular move
+    logMove({
+      type: "move",
+      player: color,
+      piece: pieceKey,
+      value: pieceValue,
+      endRow: endRow,
+      endCol: endCol,
+    });
   }
 
   // === MOVE THE PIECE ===
@@ -489,20 +543,32 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     capturedPieces.length > 0 &&
     checkForChainCapture(piece, endRow, endCol)
   ) {
-    mustCaptureWithPiece = piece; // Same piece must continue
+    mustCaptureWithPiece = piece;
   } else {
     mustCaptureWithPiece = null;
     switchTurn();
   }
 
   // === KING PROMOTION ===
+  let wasPromoted = false;
   if (!isKing) {
     if (color === "red" && endRow === 0) {
       makeKing(piece);
+      wasPromoted = true;
     }
     if (color === "blue" && endRow === 7) {
       makeKing(piece);
+      wasPromoted = true;
     }
+  }
+
+  // Log promotion if it happened
+  if (wasPromoted) {
+    logMove({
+      type: "promotion",
+      player: color,
+      piece: pieceKey,
+    });
   }
 
   // === VISUAL FEEDBACK ===
