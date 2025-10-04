@@ -9,6 +9,19 @@
   <body>
     <header>
       <h1 id="game-title">Sci-Damath Offline</h1>
+      <!-- All game controls in one container -->
+      <div id="game-controls">
+        <button id="debug-toggle">Debug Mode: OFF</button>
+        <button id="reset-board">Reset Board</button>
+        <button id="end-game">End Game & Calculate Final Scores</button>
+        <button id="surrender">Surrender</button>
+        <button id="agree-finish">Agree to Finish</button>
+        <button id="undo">Undo</button>
+        <button id="redo">Redo</button>
+        <button id="replay">Replay</button>
+        <button id="stop-replay">Stop</button>
+        <button id="toggle-transparency">Show Symbols</button>
+      </div>
     </header>
 
     <!-- Main Layout -->
@@ -19,11 +32,11 @@
         <section class="scoreboard" aria-label="Scoreboard">
           <div class="score red">
             <h3>Red Score</h3>
-            <span id="red-score">0</span>
+            <span id="red-score">0.00</span>
           </div>
           <div class="score blue">
             <h3>Blue Score</h3>
-            <span id="blue-score">0</span>
+            <span id="blue-score">0.00</span>
           </div>
         </section>
 
@@ -38,19 +51,21 @@
             <span id="round-time">1:00</span>
           </div>
           <div class="current-player-label">
-            Current Player: <span id="player">red</span>
+            Current Player: <span id="current-player">red</span>
           </div>
         </section>
       </aside>
 
       <!-- Gameboard -->
       <section id="gameboard" role="main" aria-label="Gameboard"></section>
-
+      
       <!-- Right Sidebar (Move History) -->
       <aside class="sidebar right-sidebar" aria-label="Move history">
         <section id="move-history">
-          <h3>Move History</h3>
-          <ul id="move-history-content" aria-live="polite"></ul>
+          <h3 class="move-history-header">Move History</h3>
+          <div class="move-history-scrollable">
+            <ul id="move-history-content" aria-live="polite"></ul>
+          </div>
         </section>
       </aside>
     </main>
