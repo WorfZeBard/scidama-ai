@@ -573,3 +573,17 @@ button:focus {
         font-size: 1.8rem;
     }
 }
+
+#replay-controls {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+#replay-controls button {
+    padding: 6px 12px;
+    font-size: 0.9em;
+    border-radius: 4px;
+}

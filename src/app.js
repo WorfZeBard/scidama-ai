@@ -23,6 +23,11 @@ let timersStarted = false;
 let debugMode = false;
 let mustCaptureWithPiece = null;
 
+let moveHistoryStates = []; // Full board states for undo/redo
+let currentMoveIndex = -1;  // Current position in move history
+let replayMode = false;     // Whether we're in replay mode
+let replayInterval = null;  // For auto-replay
+
 // ================== INITIAL SETUP (LIGHT SQUARES) ==================
 let INITIAL_SETUP = {
   "0,0": "b1",
@@ -182,6 +187,85 @@ function calculateFinalScores() {
   console.log(`Blue remaining pieces value: ${blueRemaining.toFixed(2)}`);
 
   return { red: redScore, blue: blueScore };
+}
+
+// Save current board state
+function saveBoardState() {
+  const state = {
+    redScore: redScore,
+    blueScore: blueScore,
+    currentPlayer: currentPlayer,
+    mustCaptureWithPiece: mustCaptureWithPiece ? 
+      { row: parseInt(mustCaptureWithPiece.parentElement.dataset.row), 
+        col: parseInt(mustCaptureWithPiece.parentElement.dataset.col) } : null,
+    pieces: []
+  };
+
+  // Save all pieces
+  document.querySelectorAll('.piece').forEach(piece => {
+    const square = piece.parentElement;
+    state.pieces.push({
+      key: Array.from(piece.classList).find(cls => cls.match(/^[rb]\d+$/)),
+      row: parseInt(square.dataset.row),
+      col: parseInt(square.dataset.col),
+      isKing: piece.classList.contains('king'),
+      value: piece.dataset.value
+    });
+  });
+
+  return state;
+}
+
+// Restore board state
+function restoreBoardState(state) {
+  // Clear board
+  document.querySelectorAll('.piece').forEach(p => p.remove());
+  
+  // Restore pieces
+  state.pieces.forEach(pieceData => {
+    const square = document.querySelector(`.square[data-row='${pieceData.row}'][data-col='${pieceData.col}']`);
+    if (!square) return;
+
+    const piece = document.createElement('div');
+    piece.classList.add('piece', pieceData.key.split(/(\d+)/)[0]); // 'r' or 'b'
+    if (pieceData.isKing) piece.classList.add('king');
+    piece.dataset.value = pieceData.value;
+    piece.draggable = true;
+    piece.tabIndex = 0;
+
+    const numberLabel = document.createElement('span');
+    numberLabel.classList.add('piece-number');
+    numberLabel.textContent = pieceData.value;
+    piece.appendChild(numberLabel);
+    square.appendChild(piece);
+  });
+
+  // Restore game state
+  redScore = state.redScore;
+  blueScore = state.blueScore;
+  currentPlayer = state.currentPlayer;
+  redScoreEl.textContent = redScore.toFixed(2);
+  blueScoreEl.textContent = blueScore.toFixed(2);
+  currentPlayerEl.textContent = currentPlayer;
+
+  // Restore mustCaptureWithPiece
+  mustCaptureWithPiece = null;
+  if (state.mustCaptureWithPiece) {
+    const { row, col } = state.mustCaptureWithPiece;
+    const square = document.querySelector(`.square[data-row='${row}'][data-col='${col}']`);
+    mustCaptureWithPiece = square?.querySelector('.piece');
+  }
+
+  // Update UI
+  clearValidMoves();
+  if (!replayMode) {
+    if (roundInterval) clearInterval(roundInterval);
+    roundMinutes = 1;
+    roundSeconds = 0;
+    roundEl.className = 'timer';
+    roundEl.classList.add(currentPlayer === 'red' ? 'timer-red' : 'timer-blue');
+    startRoundTimer();
+  }
 }
 
 // ================== DEPED SCORING ==================
@@ -472,6 +556,17 @@ function logMove(moveData) {
 
 // ================== PERFORM MOVE ==================
 function performMove(piece, startRow, startCol, endRow, endCol) {
+  if (gameOver || replayMode) return;
+
+  // Save current state BEFORE the move (for undo)
+  if (!replayMode) {
+    const prevState = saveBoardState();
+    // Truncate future states if we're in the middle of history
+    moveHistoryStates = moveHistoryStates.slice(0, currentMoveIndex + 1);
+    moveHistoryStates.push(prevState);
+    currentMoveIndex++;
+  }
+
   // Prevent moves if game is already over
   if (gameOver) return;
 
@@ -610,6 +705,13 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     timersStarted = true;
     startSessionTimer();
     startRoundTimer();
+  }
+
+  // After move completion, save the new state
+  if (!replayMode) {
+    const newState = saveBoardState();
+    moveHistoryStates.push(newState);
+    currentMoveIndex++;
   }
 }
 
@@ -811,6 +913,13 @@ function placeInitialPieces() {
   }
 
   if (debugMode) makeDebugKings();
+
+  // Save initial state
+  setTimeout(() => {
+    const initialState = saveBoardState();
+    moveHistoryStates = [initialState];
+    currentMoveIndex = 0;
+  }, 100);
 }
 
 function resetGame() {
@@ -834,6 +943,19 @@ function resetGame() {
   updateTimerDisplay();
 
   placeInitialPieces();
+
+  // Reset state tracking
+  moveHistoryStates = [];
+  currentMoveIndex = -1;
+  replayMode = false;
+  if (replayInterval) clearInterval(replayInterval);
+
+  // Re-initialize after pieces are placed
+  setTimeout(() => {
+    const initialState = saveBoardState();
+    moveHistoryStates = [initialState];
+    currentMoveIndex = 0;
+  }, 100);
 }
 
 function setupDebugControls() {
@@ -873,7 +995,10 @@ function setupDebugControls() {
   const surrenderBtn = document.getElementById("surrender");
   if (surrenderBtn) {
     surrenderBtn.addEventListener("click", () => {
-      if (!gameOver && confirm(`Are you sure you want to surrender as ${currentPlayer}?`)) {
+      if (
+        !gameOver &&
+        confirm(`Are you sure you want to surrender as ${currentPlayer}?`)
+      ) {
         surrenderRequested = currentPlayer;
         checkGameOver();
       }
@@ -888,6 +1013,28 @@ function setupDebugControls() {
         endGame("Game ended by mutual agreement.");
       }
     });
+  }
+  // Undo/Redo/Replay buttons
+  const undoBtn = document.getElementById("undo");
+  const redoBtn = document.getElementById("redo");
+  const replayBtn = document.getElementById("replay");
+  const stopReplayBtn = document.getElementById("stop-replay");
+
+  if (undoBtn) {
+    undoBtn.addEventListener("click", undoMove);
+  }
+  if (redoBtn) {
+    redoBtn.addEventListener("click", redoMove);
+  }
+  if (replayBtn) {
+    replayBtn.addEventListener("click", () => {
+      if (confirm("Start replay from beginning?")) {
+        startReplay(1000); // 1 second per move
+      }
+    });
+  }
+  if (stopReplayBtn) {
+    stopReplayBtn.addEventListener("click", stopReplay);
   }
 }
 
@@ -1028,6 +1175,62 @@ function endGame(reason) {
     "Blue:",
     blueRemaining.toFixed(2)
   );
+}
+
+function undoMove() {
+  if (gameOver || replayMode || currentMoveIndex <= 0) return;
+
+  // Go back 2 states (to before the move)
+  currentMoveIndex -= 2;
+  if (currentMoveIndex < 0) currentMoveIndex = 0;
+
+  restoreBoardState(moveHistoryStates[currentMoveIndex]);
+  gameOver = false; // Allow game to continue
+}
+
+function redoMove() {
+  if (
+    gameOver ||
+    replayMode ||
+    currentMoveIndex >= moveHistoryStates.length - 2
+  )
+    return;
+
+  // Go forward 2 states (to after the move)
+  currentMoveIndex += 2;
+  if (currentMoveIndex >= moveHistoryStates.length) {
+    currentMoveIndex = moveHistoryStates.length - 1;
+  }
+
+  restoreBoardState(moveHistoryStates[currentMoveIndex]);
+  gameOver = false;
+}
+
+function startReplay(speed = 1000) {
+  if (moveHistoryStates.length === 0) return;
+
+  replayMode = true;
+  currentMoveIndex = 0;
+  restoreBoardState(moveHistoryStates[0]);
+
+  let step = 1;
+  replayInterval = setInterval(() => {
+    if (step >= moveHistoryStates.length) {
+      stopReplay();
+      return;
+    }
+    restoreBoardState(moveHistoryStates[step]);
+    step++;
+  }, speed);
+}
+
+function stopReplay() {
+  if (replayInterval) clearInterval(replayInterval);
+  replayMode = false;
+  // Restore to current game state
+  if (currentMoveIndex >= 0 && currentMoveIndex < moveHistoryStates.length) {
+    restoreBoardState(moveHistoryStates[currentMoveIndex]);
+  }
 }
 
 // INIT
