@@ -50,15 +50,21 @@ let INITIAL_SETUP = {
 
 // ================== DEBUG SETUP ==================
 let DEBUG_SETUP = {
-  // Place kings on both sides for easy testing
-  "1,1": "r1", // Red king in middle
-  "1,3": "r2", // Red piece nearby
-  "2,2": "r3", // Red piece for capture testing
-  "6,6": "b1", // Blue king in middle  
-  "6,4": "b2", // Blue piece nearby
-  "5,5": "b3", // Blue piece for capture testing
-  "3,3": "r4", // Red piece in center for testing
-  "4,4": "b4", // Blue piece in center for testing
+  // Chain capture testing setup - kings positioned for multiple captures
+  "0,0": "r1", // Red king at corner - can capture multiple blue pieces
+  
+  "1,1": "b1", // Blue piece for red king to capture
+  "2,2": "b2", // Blue piece for chain capture
+  "3,3": "b3", // Blue piece for chain capture
+  "4,4": "b4", // Blue piece for chain capture
+  
+  "7,7": "r2", // Red king at opposite corner
+  
+  "6,6": "b5", // Blue piece for red king to capture
+  "5,5": "b6", // Blue piece for chain capture
+  
+  "0,7": "r3", // Red piece for cross-diagonal testing
+  "7,0": "r4", // Red piece for cross-diagonal testing
 };
 
 const sessionEl = document.getElementById("session-time");
@@ -173,24 +179,25 @@ function placeInitialPieces() {
 
 // ================== DEBUG KINGS ==================
 function makeDebugKings() {
-  // Make red piece at (1,1) a king
-  const redKingSquare = document.querySelector(`.square[data-row='1'][data-col='1']`);
-  const redKingPiece = redKingSquare?.querySelector('.piece.red');
-  if (redKingPiece && !redKingPiece.classList.contains('king')) {
-    makeKing(redKingPiece, "assets/red_crown.png");
-    console.log('Debug: Made red piece at (1,1) a king');
+  // Make red piece at (0,0) a king - positioned for chain captures
+  const redKingSquare1 = document.querySelector(`.square[data-row='0'][data-col='0']`);
+  const redKingPiece1 = redKingSquare1?.querySelector('.piece.red');
+  if (redKingPiece1 && !redKingPiece1.classList.contains('king')) {
+    makeKing(redKingPiece1, "assets/red_crown.png");
+    console.log('Debug: Made red piece at (0,0) a king');
   }
   
-  // Make blue piece at (6,6) a king  
-  const blueKingSquare = document.querySelector(`.square[data-row='6'][data-col='6']`);
-  const blueKingPiece = blueKingSquare?.querySelector('.piece.blue');
-  if (blueKingPiece && !blueKingPiece.classList.contains('king')) {
-    makeKing(blueKingPiece, "assets/blue_crown.png");
-    console.log('Debug: Made blue piece at (6,6) a king');
+  // Make red piece at (7,7) a king - positioned for chain captures
+  const redKingSquare2 = document.querySelector(`.square[data-row='7'][data-col='7']`);
+  const redKingPiece2 = redKingSquare2?.querySelector('.piece.red');
+  if (redKingPiece2 && !redKingPiece2.classList.contains('king')) {
+    makeKing(redKingPiece2, "assets/red_crown.png");
+    console.log('Debug: Made red piece at (7,7) a king');
   }
   
-  console.log('Debug setup complete - Kings are ready for testing!');
-  console.log('Red king at (1,1), Blue king at (6,6)');
+  console.log('Debug setup complete - Kings are ready for chain capture testing!');
+  console.log('Red kings at (0,0) and (7,7)');
+  console.log('Kings can now perform chain captures and move beyond board edges!');
 }
 
 // ================== HIGHLIGHT MATH SYMBOL ==================
@@ -257,35 +264,219 @@ function isValidMove(piece, startRow, startCol, endRow, endCol) {
   if (!isKing) {
     if (color === "red" && rowDiff >= 0) return false; // red moves up (decreasing row)
     if (color === "blue" && rowDiff <= 0) return false; // blue moves down (increasing row)
-  }
+    
+    // Regular pieces: Only allow diagonal by 1
+    if (Math.abs(rowDiff) === 1 && colDiff === 1) {
+      return true;
+    }
 
-  // Only allow diagonal by 1
-  if (Math.abs(rowDiff) === 1 && colDiff === 1) {
-    if (debugMode && isKing) console.log('Valid king move: diagonal by 1');
-    return true;
-  }
+    // Regular pieces: Capture move (jump over opponent)
+    if (Math.abs(rowDiff) === 2 && colDiff === 2) {
+      const midRow = startRow + rowDiff / 2;
+      const midCol = startCol + (endCol - startCol) / 2;
+      const midSquare = document.querySelector(
+        `.square[data-row='${midRow}'][data-col='${midCol}']`
+      );
+      const midPiece = midSquare.querySelector(".piece");
 
-  // Capture move (jump over opponent)
-  if (Math.abs(rowDiff) === 2 && colDiff === 2) {
-    const midRow = startRow + rowDiff / 2;
-    const midCol = startCol + (endCol - startCol) / 2;
-    const midSquare = document.querySelector(
-      `.square[data-row='${midRow}'][data-col='${midCol}']`
-    );
-    const midPiece = midSquare.querySelector(".piece");
-
-    if (
-      midPiece &&
-      !midPiece.classList.contains(color) &&
-      !targetSquare.querySelector(".piece")
-    ) {
-      if (debugMode && isKing) console.log('Valid king capture move');
+      if (
+        midPiece &&
+        !midPiece.classList.contains(color) &&
+        !targetSquare.querySelector(".piece")
+      ) {
+        return true;
+      }
+    }
+  } else {
+    // KING MOVEMENT: Allow multiple diagonal tiles in a straight line
+    if (Math.abs(rowDiff) === colDiff && rowDiff !== 0) {
+      // Check if path is clear (no pieces blocking the way)
+      const pathClear = isPathClear(startRow, startCol, endRow, endCol, color);
+      if (pathClear) {
+        if (debugMode) console.log('Valid king move: diagonal path clear');
+        return true;
+      }
+    }
+    
+    // KING CHAIN CAPTURE: Allow movement beyond board edges for chain captures
+    if (isChainCaptureMove(startRow, startCol, endRow, endCol, color)) {
+      if (debugMode) console.log('Valid king chain capture move beyond board edge');
       return true;
     }
   }
 
   if (debugMode && isKing) console.log('Invalid king move');
   return false;
+}
+
+// ================== PATH CLEARANCE CHECK ==================
+function isPathClear(startRow, startCol, endRow, endCol, pieceColor) {
+  const rowStep = endRow > startRow ? 1 : -1;
+  const colStep = endCol > startCol ? 1 : -1;
+  
+  let currentRow = startRow + rowStep;
+  let currentCol = startCol + colStep;
+  
+  // Check each square along the diagonal path
+  while (currentRow !== endRow && currentCol !== endCol) {
+    const square = document.querySelector(
+      `.square[data-row='${currentRow}'][data-col='${currentCol}']`
+    );
+    
+    if (square && square.querySelector(".piece")) {
+      const piece = square.querySelector(".piece");
+      // If we find an opponent piece, we can capture it and stop
+      if (!piece.classList.contains(pieceColor)) {
+        // Check if this is the last square before the destination
+        if (currentRow + rowStep === endRow && currentCol + colStep === endCol) {
+          return true; // Can capture this piece
+        } else {
+          return false; // Cannot jump over pieces
+        }
+      } else {
+        return false; // Cannot move through own pieces
+      }
+    }
+    
+    currentRow += rowStep;
+    currentCol += colStep;
+  }
+  
+  return true; // Path is clear
+}
+
+// ================== FIND CAPTURED PIECES ==================
+function findCapturedPieces(startRow, startCol, endRow, endCol, pieceColor) {
+  const capturedPieces = [];
+  const rowStep = endRow > startRow ? 1 : -1;
+  const colStep = endCol > startCol ? 1 : -1;
+  
+  let currentRow = startRow + rowStep;
+  let currentCol = startCol + colStep;
+  
+  // Check each square along the diagonal path for opponent pieces
+  while (currentRow !== endRow && currentCol !== endCol) {
+    const square = document.querySelector(
+      `.square[data-row='${currentRow}'][data-col='${currentCol}']`
+    );
+    
+    if (square && square.querySelector(".piece")) {
+      const piece = square.querySelector(".piece");
+      // If we find an opponent piece, add it to captured pieces
+      if (!piece.classList.contains(pieceColor)) {
+        capturedPieces.push(piece);
+        if (debugMode) console.log(`Found captured piece at (${currentRow},${currentCol})`);
+      }
+    }
+    
+    currentRow += rowStep;
+    currentCol += colStep;
+  }
+  
+  return capturedPieces;
+}
+
+// ================== CHAIN CAPTURE FUNCTIONS ==================
+function isChainCaptureMove(startRow, startCol, endRow, endCol, pieceColor) {
+  // Check if this move would go beyond board edges but capture a piece
+  if (endRow < 0 || endRow > 7 || endCol < 0 || endCol > 7) {
+    // This move goes beyond board edges - check if there's a capture opportunity
+    const capturedPieces = findCapturedPiecesBeyondBoard(startRow, startCol, endRow, endCol, pieceColor);
+    return capturedPieces.length > 0;
+  }
+  return false;
+}
+
+function findCapturedPiecesBeyondBoard(startRow, startCol, endRow, endCol, pieceColor) {
+  const capturedPieces = [];
+  const rowStep = endRow > startRow ? 1 : -1;
+  const colStep = endCol > startCol ? 1 : -1;
+  
+  let currentRow = startRow + rowStep;
+  let currentCol = startCol + colStep;
+  
+  // Check each square along the diagonal path, including beyond board edges
+  while (true) {
+    // If we're still on the board, check for pieces
+    if (currentRow >= 0 && currentRow <= 7 && currentCol >= 0 && currentCol <= 7) {
+      const square = document.querySelector(
+        `.square[data-row='${currentRow}'][data-col='${currentCol}']`
+      );
+      
+      if (square && square.querySelector(".piece")) {
+        const piece = square.querySelector(".piece");
+        if (!piece.classList.contains(pieceColor)) {
+          capturedPieces.push(piece);
+          if (debugMode) console.log(`Found captured piece at (${currentRow},${currentCol}) for chain capture`);
+        } else {
+          break; // Hit own piece, stop
+        }
+      }
+    }
+    
+    // Continue moving along the diagonal
+    currentRow += rowStep;
+    currentCol += colStep;
+    
+    // Stop if we've reached the target position
+    if (currentRow === endRow && currentCol === endCol) {
+      break;
+    }
+    
+    // Safety check to prevent infinite loops
+    if (Math.abs(currentRow - startRow) > 10 || Math.abs(currentCol - startCol) > 10) {
+      break;
+    }
+  }
+  
+  return capturedPieces;
+}
+
+function checkForChainCapture(piece, currentRow, currentCol) {
+  // Check all 4 diagonal directions for additional capture opportunities
+  const directions = [
+    [-1, -1], [-1, 1], [1, -1], [1, 1] // All diagonal directions
+  ];
+  
+  let hasChainCapture = false;
+  
+  directions.forEach(([rowDir, colDir]) => {
+    let testRow = currentRow + rowDir;
+    let testCol = currentCol + colDir;
+    
+    // Look for opponent pieces in this direction
+    while (testRow >= 0 && testRow <= 7 && testCol >= 0 && testCol <= 7) {
+      const square = document.querySelector(
+        `.square[data-row='${testRow}'][data-col='${testCol}']`
+      );
+      
+      if (square && square.querySelector(".piece")) {
+        const testPiece = square.querySelector(".piece");
+        const color = piece.classList.contains("red") ? "red" : "blue";
+        
+        if (!testPiece.classList.contains(color)) {
+          // Found opponent piece - check if we can capture it
+          hasChainCapture = true;
+          if (debugMode) console.log(`Chain capture opportunity found at (${testRow},${testCol})`);
+          break;
+        } else {
+          break; // Hit own piece
+        }
+      }
+      
+      testRow += rowDir;
+      testCol += colDir;
+    }
+  });
+  
+  if (hasChainCapture) {
+    if (debugMode) console.log('Chain capture available - king can continue moving');
+    // Don't switch turns yet - allow player to continue capturing
+    return false; // Don't switch turn
+  } else {
+    if (debugMode) console.log('No more chain captures available');
+    return true; // Switch turn
+  }
 }
 
 // ================== PERFORM MOVE ==================
@@ -297,30 +488,59 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     `.square[data-row='${endRow}'][data-col='${endCol}']`
   );
 
-  // Capture
-  if (Math.abs(endRow - startRow) === 2) {
-    const midRow = (startRow + endRow) / 2;
-    const midCol = (startCol + endCol) / 2;
-    const midSquare = document.querySelector(
-      `.square[data-row='${midRow}'][data-col='${midCol}']`
-    );
-    const midPiece = midSquare.querySelector(".piece");
-    if (midPiece) {
-      const capturedValue = parseInt(midPiece.dataset.value, 10);
-      midPiece.remove();
-
-      if (piece.classList.contains("red")) redScore += capturedValue;
+  // Handle captures
+  const isKing = piece.classList.contains("king");
+  const color = piece.classList.contains("red") ? "red" : "blue";
+  
+  if (isKing) {
+    // King capture: Check for captured pieces along the diagonal path
+    const capturedPieces = findCapturedPieces(startRow, startCol, endRow, endCol, color);
+    capturedPieces.forEach(capturedPiece => {
+      const capturedValue = parseInt(capturedPiece.dataset.value, 10);
+      capturedPiece.remove();
+      
+      if (color === "red") redScore += capturedValue;
       else blueScore += capturedValue;
-
+      
       redScoreEl.textContent = redScore;
       blueScoreEl.textContent = blueScore;
+      
+      if (debugMode) console.log(`King captured piece with value ${capturedValue}`);
+    });
+    
+    // Check for chain capture opportunities after this move
+    let shouldSwitchTurn = true;
+    if (capturedPieces.length > 0) {
+      shouldSwitchTurn = checkForChainCapture(piece, endRow, endCol);
+    }
+    
+    // Store the shouldSwitchTurn flag for later use
+    piece.dataset.shouldSwitchTurn = shouldSwitchTurn;
+  } else {
+    // Regular piece capture (original logic)
+    if (Math.abs(endRow - startRow) === 2) {
+      const midRow = (startRow + endRow) / 2;
+      const midCol = (startCol + endCol) / 2;
+      const midSquare = document.querySelector(
+        `.square[data-row='${midRow}'][data-col='${midCol}']`
+      );
+      const midPiece = midSquare.querySelector(".piece");
+      if (midPiece) {
+        const capturedValue = parseInt(midPiece.dataset.value, 10);
+        midPiece.remove();
+
+        if (piece.classList.contains("red")) redScore += capturedValue;
+        else blueScore += capturedValue;
+
+        redScoreEl.textContent = redScore;
+        blueScoreEl.textContent = blueScore;
+      }
     }
   }
 
   endSquare.appendChild(piece);
 
   // ===== KING PROMOTION =====
-  const color = piece.classList.contains("red") ? "red" : "blue";
 
   // Red reaches row 0 → king
   if (color === "red" && endRow === 0 && !piece.classList.contains("king")) {
@@ -358,13 +578,21 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     startRoundTimer();
   }
 
-  // Switch turn after move
-  switchTurn();
+  // Switch turn after move (unless chain capture is available)
+  const shouldSwitchTurn = piece.dataset.shouldSwitchTurn !== 'false';
+  if (shouldSwitchTurn) {
+    switchTurn();
+  } else {
+    // Keep the same player for chain capture
+    if (debugMode) console.log('Turn not switched - chain capture available');
+  }
 }
 
 // ================== VALID MOVE HIGHLIGHTS ==================
 function showValidMoves(piece, startRow, startCol) {
   clearValidMoves();
+  
+  // Show valid moves within board bounds
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       if (isValidMove(piece, startRow, startCol, r, c)) {
@@ -375,11 +603,56 @@ function showValidMoves(piece, startRow, startCol) {
       }
     }
   }
+  
+  // Show chain capture opportunities beyond board edges
+  if (piece.classList.contains("king")) {
+    showChainCaptureMoves(piece, startRow, startCol);
+  }
+}
+
+function showChainCaptureMoves(piece, startRow, startCol) {
+  const color = piece.classList.contains("red") ? "red" : "blue";
+  
+  // Check all 4 diagonal directions for chain capture opportunities
+  const directions = [
+    [-1, -1], [-1, 1], [1, -1], [1, 1] // All diagonal directions
+  ];
+  
+  directions.forEach(([rowDir, colDir]) => {
+    let testRow = startRow + rowDir;
+    let testCol = startCol + colDir;
+    
+    // Look for opponent pieces in this direction
+    while (testRow >= 0 && testRow <= 7 && testCol >= 0 && testCol <= 7) {
+      const square = document.querySelector(
+        `.square[data-row='${testRow}'][data-col='${testCol}']`
+      );
+      
+      if (square && square.querySelector(".piece")) {
+        const testPiece = square.querySelector(".piece");
+        
+        if (!testPiece.classList.contains(color)) {
+          // Found opponent piece - mark it as a chain capture target
+          square.classList.add("chain-capture-target");
+          if (debugMode) console.log(`Chain capture target at (${testRow},${testCol})`);
+          break;
+        } else {
+          break; // Hit own piece
+        }
+      }
+      
+      testRow += rowDir;
+      testCol += colDir;
+    }
+  });
 }
 
 function clearValidMoves() {
   document.querySelectorAll(".square.valid-move").forEach((sq) => {
     sq.classList.remove("valid-move");
+  });
+  document.querySelectorAll(".square.chain-capture-target").forEach((sq) => {
+    sq.classList.remove("chain-capture-target");
   });
 }
 

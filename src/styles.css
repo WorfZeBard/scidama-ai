@@ -303,6 +303,28 @@ h1 {
     transition: outline 0.2s ease;
 }
 
+.square.chain-capture-target {
+    outline: 3px solid rgba(255, 0, 255, 0.8);
+    background: rgba(255, 0, 255, 0.1);
+    animation: pulseChainCapture 1s infinite;
+    transition: all 0.2s ease;
+}
+
+@keyframes pulseChainCapture {
+    0% {
+        outline-color: rgba(255, 0, 255, 0.8);
+        background: rgba(255, 0, 255, 0.1);
+    }
+    50% {
+        outline-color: rgba(255, 0, 255, 1);
+        background: rgba(255, 0, 255, 0.2);
+    }
+    100% {
+        outline-color: rgba(255, 0, 255, 0.8);
+        background: rgba(255, 0, 255, 0.1);
+    }
+}
+
 .square.invalid-move {
     animation: shake 0.3s;
 }
