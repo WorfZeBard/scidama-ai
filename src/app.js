@@ -31,6 +31,8 @@ let replayMode = false;
 let replayInterval = null;
 let gameOver = false;
 
+let piecesTransparent = false;
+
 // ================== INITIAL SETUP (LIGHT SQUARES) ==================
 let INITIAL_SETUP = {
   "0,0": "b1",
@@ -1058,6 +1060,11 @@ function setupDebugControls() {
   if (stopReplayBtn) {
     stopReplayBtn.addEventListener("click", stopReplay);
   }
+
+  const transparencyBtn = document.getElementById("toggle-transparency");
+  if (transparencyBtn) {
+    transparencyBtn.addEventListener("click", togglePieceTransparency);
+  }
 }
 
 // ================== GAME OVER FLAG CONDITIONS ==================
@@ -1249,6 +1256,23 @@ function stopReplay() {
   // Restore to current game state
   if (currentMoveIndex >= 0 && currentMoveIndex < moveHistoryStates.length) {
     restoreBoardState(moveHistoryStates[currentMoveIndex]);
+  }
+}
+
+function togglePieceTransparency() {
+  piecesTransparent = !piecesTransparent;
+
+  const toggleBtn = document.getElementById("toggle-transparency");
+  const pieces = document.querySelectorAll(".piece");
+
+  if (piecesTransparent) {
+    pieces.forEach((piece) => piece.classList.add("transparent"));
+    toggleBtn.textContent = "Hide Symbols";
+    toggleBtn.classList.add("active");
+  } else {
+    pieces.forEach((piece) => piece.classList.remove("transparent"));
+    toggleBtn.textContent = "Show Symbols";
+    toggleBtn.classList.remove("active");
   }
 }
 

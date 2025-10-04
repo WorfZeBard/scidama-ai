@@ -560,3 +560,20 @@ button:focus {
         font-size: 1.8rem;
     }
 }
+
+/* Piece transparency for symbol visibility */
+.piece.transparent {
+    opacity: 0.4;
+    background: rgba(0, 0, 0, 0.1) !important;
+    border-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+.piece.transparent .piece-number {
+    opacity: 0.6;
+}
+
+/* Optional: Make transparency toggle button active state */
+#toggle-transparency.active {
+    background: #4CAF50;
+    color: white;
+}
