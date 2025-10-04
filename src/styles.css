@@ -113,7 +113,7 @@ h1 {
     color: #083944;
 }
 
-/* ================== TIMER WRAPPERS ================== */
+/* ================== TIMERS ================== */
 .timers {
     display: flex;
     gap: 30px;
@@ -135,10 +135,9 @@ h1 {
     color: #333;
 }
 
-/* Active player glow for round timer */
+/* Active player glow */
 .timer-red {
     color: #c0392b;
-    /* red */
     text-shadow: 0 0 5px #e74c3c, 0 0 10px #e74c3c;
     font-weight: bold;
     transition: all 0.3s ease;
@@ -146,7 +145,6 @@ h1 {
 
 .timer-blue {
     color: #2980b9;
-    /* blue */
     text-shadow: 0 0 5px #3498db, 0 0 10px #3498db;
     font-weight: bold;
     transition: all 0.3s ease;
@@ -157,9 +155,25 @@ h1 {
     color: #f1c40f;
     text-shadow: 0 0 8px #f39c12, 0 0 12px #f1c40f;
     font-weight: bold;
+    animation: flashYellow 0.5s infinite;
 }
 
-/* Current player label styling */
+@keyframes flashYellow {
+
+    0%,
+    50%,
+    100% {
+        color: #f1c40f;
+        text-shadow: 0 0 8px #f1c40f;
+    }
+
+    25%,
+    75% {
+        color: #fff;
+        text-shadow: none;
+    }
+}
+
 .current-player-label {
     font-size: 1em;
     font-weight: bold;
@@ -182,6 +196,18 @@ h1 {
 
 .square.dark {
     background: #769656;
+    pointer-events: none;
+    /* 🔥 Disable interaction */
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Prevent any interaction effects on dark squares */
+.square.dark:hover,
+.square.dark.valid-move,
+.square.dark.invalid-move {
+    outline: none !important;
+    transform: none !important;
 }
 
 /* ================== PIECES ================== */
@@ -198,22 +224,15 @@ h1 {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
     position: relative;
     z-index: 1;
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: #fff;
 }
 
 .piece:hover {
     transform: scale(1.05);
 }
 
-.piece img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    /* ensures it fits inside the circle */
-    display: block;
-    margin: auto;
-}
-
-/* Gradients for pieces on light squares */
 .piece.red {
     background: linear-gradient(145deg, #e57373, #c62828);
     border: 2px solid #8b1e1e;
@@ -227,6 +246,21 @@ h1 {
 .piece.king {
     border: 3px gold solid;
     box-shadow: 0 0 15px rgba(255, 215, 0, 0.6), 0 2px 5px rgba(0, 0, 0, 0.25);
+}
+
+.piece-number {
+    pointer-events: none;
+    z-index: 2;
+    font-size: 1.2rem;
+}
+
+/* King crown image */
+.piece img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    margin: auto;
 }
 
 .king-image {
@@ -282,47 +316,9 @@ h1 {
 }
 
 /* ================== HIGHLIGHTS ================== */
-.square.yellow {
-    outline: 3px solid #ffeb3b;
-}
-
-.square.red {
-    outline: 3px solid #f44336;
-}
-
-.square.hover-yellow {
-    outline: 3px dashed #fff176;
-}
-
-.square.hover-red {
-    outline: 2px dashed #f8a5a5;
-}
-
 .square.valid-move {
     outline: 3px solid rgba(255, 255, 0, 0.7);
     transition: outline 0.2s ease;
-}
-
-.square.chain-capture-target {
-    outline: 3px solid rgba(255, 0, 255, 0.8);
-    background: rgba(255, 0, 255, 0.1);
-    animation: pulseChainCapture 1s infinite;
-    transition: all 0.2s ease;
-}
-
-@keyframes pulseChainCapture {
-    0% {
-        outline-color: rgba(255, 0, 255, 0.8);
-        background: rgba(255, 0, 255, 0.1);
-    }
-    50% {
-        outline-color: rgba(255, 0, 255, 1);
-        background: rgba(255, 0, 255, 0.2);
-    }
-    100% {
-        outline-color: rgba(255, 0, 255, 0.8);
-        background: rgba(255, 0, 255, 0.1);
-    }
 }
 
 .square.invalid-move {
@@ -437,101 +433,3 @@ button:focus {
         font-size: 0.85em;
     }
 }
-
-/* Flashing warning for last 10 seconds */
-@keyframes flashYellow {
-
-    0%,
-    50%,
-    100% {
-        color: #f1c40f;
-        text-shadow: 0 0 8px #f1c40f;
-    }
-
-    25%,
-    75% {
-        color: #fff;
-        text-shadow: none;
-    }
-}
-
-.timer-warning {
-    animation: flashYellow 0.5s infinite;
-}
-
-/* Flashing timer for the active player */
-.timer-red {
-    color: #c0392b;
-    /* red */
-    text-shadow: 0 0 5px #e74c3c, 0 0 10px #e74c3c;
-    font-weight: bold;
-    transition: all 0.3s ease;
-}
-
-.timer-blue {
-    color: #2980b9;
-    /* blue */
-    text-shadow: 0 0 5px #3498db, 0 0 10px #3498db;
-    font-weight: bold;
-    transition: all 0.3s ease;
-}
-
-/* Optional: warning flash if time < 10s */
-.timer-warning {
-    color: #f1c40f;
-    text-shadow: 0 0 8px #f39c12, 0 0 12px #f1c40f;
-    font-weight: bold;
-}
-
-.piece {
-    width: 80%;
-    height: 80%;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
-    position: relative;
-    z-index: 1;
-    font-weight: bold;
-    font-size: 1.2rem;
-    color: #fff;
-}
-
-.piece.red {
-    background: linear-gradient(145deg, #e57373, #c62828);
-    border: 2px solid #8b1e1e;
-}
-
-.piece.blue {
-    background: linear-gradient(145deg, #64b5f6, #1565c0);
-    border: 2px solid #0d3a66;
-}
-
-.piece-number {
-    pointer-events: none;
-    z-index: 2;
-    font-size: 1.2rem;
-}
-
-.piece {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    width: 80%;
-    height: 80%;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 1.2em;
-    color: #fff;
-}
-
-.piece-number {
-    z-index: 2;
-    /* ensure number stays on top */
-}
-
-/* Removed .king-symbol - replaced with .king-image for better visibility */
