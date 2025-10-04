@@ -70,6 +70,8 @@ h1 {
     border: 5px solid #333;
     margin-bottom: 15px;
     transition: all 0.2s ease;
+    user-select: none;
+    /* Prevent board text selection */
 }
 
 /* Sidebar */
@@ -135,7 +137,6 @@ h1 {
     color: #333;
 }
 
-/* Active player glow */
 .timer-red {
     color: #c0392b;
     text-shadow: 0 0 5px #e74c3c, 0 0 10px #e74c3c;
@@ -150,7 +151,6 @@ h1 {
     transition: all 0.3s ease;
 }
 
-/* Warning flash if < 10 seconds */
 .timer-warning {
     color: #f1c40f;
     text-shadow: 0 0 8px #f39c12, 0 0 12px #f1c40f;
@@ -197,88 +197,15 @@ h1 {
 .square.dark {
     background: #769656;
     pointer-events: none;
-    /* 🔥 Disable interaction */
     opacity: 0.4;
     cursor: default;
 }
 
-/* Prevent any interaction effects on dark squares */
 .square.dark:hover,
 .square.dark.valid-move,
 .square.dark.invalid-move {
     outline: none !important;
     transform: none !important;
-}
-
-/* ================== PIECES ================== */
-.piece {
-    width: 80%;
-    height: 80%;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.15s ease;
-    cursor: pointer;
-    outline: none;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
-    position: relative;
-    z-index: 1;
-    font-weight: bold;
-    font-size: 1.2rem;
-    color: #fff;
-}
-
-.piece:hover {
-    transform: scale(1.05);
-}
-
-.piece.red {
-    background: linear-gradient(145deg, #e57373, #c62828);
-    border: 2px solid #8b1e1e;
-}
-
-.piece.blue {
-    background: linear-gradient(145deg, #64b5f6, #1565c0);
-    border: 2px solid #0d3a66;
-}
-
-.piece.king {
-    border: 3px gold solid;
-    box-shadow: 0 0 15px rgba(255, 215, 0, 0.6), 0 2px 5px rgba(0, 0, 0, 0.25);
-}
-
-.piece-number {
-    pointer-events: none;
-    z-index: 2;
-    font-size: 1.2rem;
-}
-
-/* King crown image */
-.piece img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-    margin: auto;
-}
-
-.king-image {
-    width: 35%;
-    height: 35%;
-    position: absolute;
-    top: 8%;
-    left: 50%;
-    transform: translateX(-50%);
-    pointer-events: none;
-    z-index: 3;
-    filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.8));
-    transition: all 0.3s ease;
-}
-
-.piece.king:hover .king-image {
-    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 1)) brightness(1.2);
-    transform: translateX(-50%) scale(1.1);
 }
 
 /* ================== SYMBOLS ================== */
@@ -318,6 +245,106 @@ h1 {
         color: rgba(241, 196, 15, 0.25);
         text-shadow: none;
     }
+}
+
+/* ================== PIECES ================== */
+.piece {
+    width: 80%;
+    height: 80%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, width 0.2s ease, height 0.2s ease;
+    cursor: pointer;
+    outline: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+    position: relative;
+    z-index: 1;
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: #fff;
+}
+
+.piece:hover {
+    transform: scale(1.05);
+}
+
+/* Base colors with CSS variables for kings */
+.piece.red {
+    --base-gradient: linear-gradient(145deg, #e57373, #c62828);
+    background: var(--base-gradient);
+    border: 2px solid #8b1e1e;
+}
+
+.piece.blue {
+    --base-gradient: linear-gradient(145deg, #64b5f6, #1565c0);
+    background: var(--base-gradient);
+    border: 2px solid #0d3a66;
+}
+
+/* =============== KING STYLING (NO CROWN IMAGE) =============== */
+.piece.king {
+    /* Larger size */
+    width: 88%;
+    height: 88%;
+    /* Thick gold border */
+    border: 4px solid gold;
+    /* Golden glow */
+    box-shadow:
+        0 0 8px rgba(255, 215, 0, 0.7),
+        0 0 16px rgba(255, 215, 0, 0.4),
+        0 2px 6px rgba(0, 0, 0, 0.2);
+    /* Preserve base color with overlay */
+    background:
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.15), transparent),
+        var(--base-gradient);
+}
+
+.piece.king:hover {
+    transform: scale(1.07);
+    box-shadow:
+        0 0 12px rgba(255, 215, 0, 1),
+        0 0 20px rgba(255, 215, 0, 0.6),
+        0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* =============== PROMOTION ANIMATION =============== */
+.piece.promote {
+    animation: kingPromotion 0.6s ease-out;
+}
+
+@keyframes kingPromotion {
+    0% {
+        box-shadow:
+            0 0 0 gold,
+            0 0 0 gold,
+            0 2px 5px rgba(0, 0, 0, 0.25);
+        transform: scale(1);
+    }
+
+    50% {
+        box-shadow:
+            0 0 15px gold,
+            0 0 30px rgba(255, 215, 0, 0.8),
+            0 4px 10px rgba(0, 0, 0, 0.3);
+        transform: scale(1.1);
+    }
+
+    100% {
+        box-shadow:
+            0 0 8px rgba(255, 215, 0, 0.7),
+            0 0 16px rgba(255, 215, 0, 0.4),
+            0 2px 6px rgba(0, 0, 0, 0.2);
+        transform: scale(1.1);
+    }
+}
+
+/* Piece number (always on top) */
+.piece-number {
+    pointer-events: none;
+    z-index: 2;
+    font-size: 1.2rem;
 }
 
 /* ================== HIGHLIGHTS ================== */

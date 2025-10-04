@@ -498,10 +498,10 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   // === KING PROMOTION ===
   if (!isKing) {
     if (color === "red" && endRow === 0) {
-      makeKing(piece, "assets/red_crown.png");
+      makeKing(piece);
     }
     if (color === "blue" && endRow === 7) {
-      makeKing(piece, "assets/blue_crown.png");
+      makeKing(piece);
     }
   }
 
@@ -517,17 +517,15 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   }
 }
 
-function makeKing(piece, kingImgSrc) {
+function makeKing(piece) {
+  // Add king class
   piece.classList.add("king");
 
-  const oldKingImg = piece.querySelector(".king-image");
-  if (oldKingImg) oldKingImg.remove();
-
-  const kingImg = document.createElement("img");
-  kingImg.src = kingImgSrc;
-  kingImg.classList.add("king-image");
-  kingImg.alt = "King";
-  piece.appendChild(kingImg);
+  // Trigger promotion animation
+  piece.classList.add("promote");
+  setTimeout(() => {
+    piece.classList.remove("promote");
+  }, 600);
 }
 
 // ================== DEBUG KINGS ==================
@@ -540,7 +538,7 @@ function makeDebugKings() {
     );
     const piece = square?.querySelector(".piece.red");
     if (piece && !piece.classList.contains("king")) {
-      makeKing(piece, "assets/red_crown.png");
+      makeKing(piece); // No image path
     }
   });
 }
