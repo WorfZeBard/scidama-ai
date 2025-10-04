@@ -3,106 +3,64 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Sci-Damath Offline - A mathematical board game">
-    <title>Sci-Damath Offline</title>
+    <title>Sci-Damath</title>
     <link rel="stylesheet" href="styles.css" />
-    <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
   </head>
-  <body>
-    <!-- Skip link for accessibility -->
-    <a href="#gameboard" class="skip-link"></a>
-    
-    <header>
-      <h1 id="game-title">Sci-Damath Offline</h1>
-      
-      <!-- Game status display -->
-      <div id="game-status" class="game-status" aria-live="polite"></div>
-      
-      <!-- Error message display -->
-      <div id="error-message" class="error-message" aria-live="assertive" hidden></div>
-      
-      <!-- Loading indicator -->
-      <div id="loading" class="loading" hidden>Loading game...</div>
+  <body class="menu-screen">
+    <!-- Background board (no pieces) -->
+    <div id="menu-board-background" aria-hidden="true"></div>
 
-      <!-- All game controls in one container -->
-      <div id="game-controls">
-        <button id="debug-toggle">Debug Mode: OFF</button>
-        <button id="reset-board">Reset Board</button>
-        <button id="end-game">End Game & Calculate Final Scores</button>
-        <button id="replay">Replay</button>
-        <button id="stop-replay">Stop</button>
+    <!-- Skip link -->
+    <a href="#main-menu" class="skip-link">Skip to main menu</a>
+
+    <!-- Main menu content -->
+    <div id="main-menu" class="menu-content">
+      <h1 id="menu-title">Sci-Damath Offline</h1>
+      <div class="menu-buttons">
+        <a href="game.html?mode=pvp" class="menu-btn">Player vs Player</a>
+        <button class="menu-btn" disabled>
+          Player vs Computer (Coming Soon)
+        </button>
       </div>
-    </header>
-
-    <!-- Main Layout -->
-    <main class="game-container">
-      <!-- Left Sidebar (Scores + Timers) -->
-      <aside class="sidebar left-sidebar" aria-label="Game stats">
-        <!-- Scores -->
-        <section class="scoreboard" aria-label="Scoreboard">
-          <div class="score red">
-            <h3>Red Score</h3>
-            <span id="red-score">0.00</span>
-          </div>
-          <div class="score blue">
-            <h3>Blue Score</h3>
-            <span id="blue-score">0.00</span>
-          </div>
-        </section>
-
-        <!-- Timers -->
-        <section class="timers" aria-label="Timers">
-          <div class="timer-wrapper">
-            <span class="timer-label">Session:</span>
-            <span id="session-time">20:00</span>
-          </div>
-          <div class="timer-wrapper">
-            <span class="timer-label">Round:</span>
-            <span id="round-time">1:00</span>
-          </div>
-          <div class="current-player-label">
-            Current Player: <span id="current-player">red</span>
-          </div>
-        </section>
-      </aside>
-
-      <!-- Gameboard -->
-      <section id="gameboard" role="main" aria-label="Gameboard" aria-describedby="game-instructions"></section>
-
-      <!-- Right Sidebar (Move History + Game Controls) -->
-      <aside class="sidebar right-sidebar" aria-label="Move history and game controls">
-        <!-- Move History -->
-        <section id="move-history">
-          <h3 class="move-history-header">Move History</h3>
-          <div class="move-history-scrollable">
-            <ul id="move-history-content" aria-live="polite"></ul>
-          </div>
-        </section>
-
-        <!-- Game Action Buttons -->
-        <div id="action-buttons" class="action-buttons">
-          <button id="surrender">Surrender</button>
-          <button id="agree-finish">Agree to Finish</button>
-          <button id="undo">Undo</button>
-          <button id="redo">Redo</button>
-          <button id="toggle-transparency">Show Symbols</button>
-        </div>
-      </aside>
-    </main>
-
-    <!-- Hidden game instructions for screen readers -->
-    <div id="game-instructions" hidden>
-      Sci-Damath is a mathematical board game. Players take turns moving pieces and performing mathematical operations.
+      <p class="menu-note">Computer AI mode is under development.</p>
     </div>
+    <script>
+      // Minimal setup to render background board
+      const DAMATH_LAYOUT = [
+        ["x", "", "÷", "", "-", "", "+", ""],
+        ["", "÷", "", "x", "", "+", "", "-"],
+        ["-", "", "+", "", "x", "", "÷", ""],
+        ["", "+", "", "-", "", "÷", "", "x"],
+        ["x", "", "÷", "", "-", "", "+", ""],
+        ["", "÷", "", "x", "", "+", "", "-"],
+        ["-", "", "+", "", "x", "", "÷", ""],
+        ["", "+", "", "-", "", "÷", "", "x"],
+      ];
 
-    <!-- Sound Effects -->
-    <div id="sounds">
-      <audio id="move-promotion001" src="assets/move-promotion001.mp3" preload="auto"></audio>
-      <audio id="move-sound" src="assets/move.mp3" preload="auto"></audio>
-      <audio id="capture-sound" src="assets/capture.mp3" preload="auto"></audio>
-    </div>
+      function createMenuBoard() {
+        const bg = document.getElementById("menu-board-background");
+        if (!bg) return;
 
-    <!-- Scripts -->
-    <script src="app.js"></script>
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const square = document.createElement("div");
+            const isLight = (row + col) % 2 === 0;
+            square.classList.add("square", isLight ? "light" : "dark");
+            const symbol = document.createElement("span");
+            symbol.classList.add("symbol");
+            symbol.textContent = DAMATH_LAYOUT[row][col];
+            symbol.setAttribute("aria-hidden", "true");
+            square.appendChild(symbol);
+            bg.appendChild(square);
+          }
+        }
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", createMenuBoard);
+      } else {
+        createMenuBoard();
+      }
+    </script>
   </body>
 </html>
