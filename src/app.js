@@ -1301,29 +1301,41 @@ function resetGame() {
 function setupDebugControls() {
   const toggle = document.getElementById("debug-toggle");
   const reset = document.getElementById("reset-board");
-
-  toggle?.addEventListener("click", () => {
-    debugMode = !debugMode;
-    toggle.textContent = `Debug Mode: ${debugMode ? "ON" : "OFF"}`;
-    toggle.classList.toggle("debug-on", debugMode);
-    resetGame();
-  });
-
-  reset?.addEventListener("click", resetGame);
-
   const endGameBtn = document.getElementById("end-game");
+  const surrenderBtn = document.getElementById("surrender");
+  const agreeBtn = document.getElementById("agree-finish");
+  const undoBtn = document.getElementById("undo");
+  const redoBtn = document.getElementById("redo");
+  const replayBtn = document.getElementById("replay");
+  const stopReplayBtn = document.getElementById("stop-replay");
+  const transparencyBtn = document.getElementById("toggle-transparency");
+  const backToMenuBtn = document.getElementById("back-to-menu");
+
+  // Debug toggle
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      debugMode = !debugMode;
+      toggle.textContent = `Debug Mode: ${debugMode ? "ON" : "OFF"}`;
+      toggle.classList.toggle("debug-on", debugMode);
+      resetGame();
+    });
+  }
+
+  // Reset board
+  if (reset) {
+    reset.addEventListener("click", resetGame);
+  }
+
+  // End game
   if (endGameBtn) {
     endGameBtn.addEventListener("click", () => {
       if (sessionInterval) clearInterval(sessionInterval);
       if (roundInterval) clearInterval(roundInterval);
-
-      // Just call endGame() directly
       endGame("Game ended manually");
     });
   }
 
-  // Surrender button
-  const surrenderBtn = document.getElementById("surrender");
+  // Surrender
   if (surrenderBtn) {
     surrenderBtn.addEventListener("click", () => {
       if (
@@ -1336,8 +1348,7 @@ function setupDebugControls() {
     });
   }
 
-  // Mutual agreement button
-  const agreeBtn = document.getElementById("agree-finish");
+  // Agree to finish
   if (agreeBtn) {
     agreeBtn.addEventListener("click", () => {
       if (!gameOver && confirm("Do both players agree to end the game?")) {
@@ -1346,22 +1357,15 @@ function setupDebugControls() {
     });
   }
 
-  // Undo/Redo/Replay buttons
-  const undoBtn = document.getElementById("undo");
-  const redoBtn = document.getElementById("redo");
-  const replayBtn = document.getElementById("replay");
-  const stopReplayBtn = document.getElementById("stop-replay");
+  // Undo/Redo
+  if (undoBtn) undoBtn.addEventListener("click", undoMove);
+  if (redoBtn) redoBtn.addEventListener("click", redoMove);
 
-  if (undoBtn) {
-    undoBtn.addEventListener("click", undoMove);
-  }
-  if (redoBtn) {
-    redoBtn.addEventListener("click", redoMove);
-  }
+  // Replay
   if (replayBtn) {
     replayBtn.addEventListener("click", () => {
       if (confirm("Start replay from beginning?")) {
-        startReplay(1000); // 1 second per move
+        startReplay(1000);
       }
     });
   }
@@ -1369,9 +1373,19 @@ function setupDebugControls() {
     stopReplayBtn.addEventListener("click", stopReplay);
   }
 
-  const transparencyBtn = document.getElementById("toggle-transparency");
+  // Transparency toggle
   if (transparencyBtn) {
     transparencyBtn.addEventListener("click", togglePieceTransparency);
+  }
+
+  // Back to menu (only in game.html)
+  if (backToMenuBtn) {
+    backToMenuBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (confirm("Return to main menu? Current game will be lost.")) {
+        window.location.href = "index.html";
+      }
+    });
   }
 }
 
