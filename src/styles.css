@@ -17,9 +17,74 @@ h1 {
     text-align: center;
 }
 
+/* ================== SKIP LINK ================== */
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 6px;
+    background: #000;
+    color: white;
+    padding: 8px;
+    z-index: 100;
+    text-decoration: none;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.skip-link:focus {
+    top: 6px;
+}
+
+/* ================== LOADING & STATUS ================== */
+.loading {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 20px 30px;
+    border-radius: 8px;
+    z-index: 1000;
+    font-weight: bold;
+}
+
+.game-status {
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: bold;
+    width: 90%;
+    max-width: 600px;
+}
+
+.game-status.success {
+    background: rgba(46, 204, 113, 0.2);
+    border: 1px solid #27ae60;
+    color: #27ae60;
+}
+
+.game-status.error {
+    background: rgba(231, 76, 60, 0.2);
+    border: 1px solid #c0392b;
+    color: #c0392b;
+}
+
+.error-message {
+    background: rgba(231, 76, 60, 0.9);
+    color: white;
+    padding: 10px;
+    border-radius: 6px;
+    margin: 10px 0;
+    text-align: center;
+    font-weight: bold;
+}
+
 /* ================== GAME CONTROLS ================== */
 #game-controls {
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
     padding: 10px;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -29,6 +94,7 @@ h1 {
     gap: 8px;
     justify-content: center;
     max-width: 95vw;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 #game-controls button {
@@ -42,11 +108,20 @@ h1 {
     font-size: 0.9em;
     min-width: 100px;
     white-space: nowrap;
+    background: linear-gradient(145deg, #6c757d, #495057);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-#game-controls button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+#game-controls button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+#debug-toggle.debug-on {
+    background: linear-gradient(145deg, #ff6b6b, #ee5a52);
+    color: white;
 }
 
 /* ================== GAME LAYOUT ================== */
@@ -156,7 +231,7 @@ h1 {
     color: #f1c40f;
     text-shadow: 0 0 8px #f39c12, 0 0 12px #f1c40f;
     font-weight: bold;
-    animation: flashYellow 0.5s infinite;
+    animation: flashYellow 0.5s infinite, pulse 1s infinite;
 }
 
 @keyframes flashYellow {
@@ -175,10 +250,40 @@ h1 {
     }
 }
 
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
 .current-player-label {
     font-size: 1em;
     font-weight: bold;
     text-align: center;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-top: 10px;
+    transition: all 0.3s ease;
+}
+
+.current-player-label[data-player="red"] {
+    background: rgba(198, 40, 40, 0.1);
+    border: 2px solid #c62828;
+    color: #c62828;
+}
+
+.current-player-label[data-player="blue"] {
+    background: rgba(21, 101, 192, 0.1);
+    border: 2px solid #1565c0;
+    color: #1565c0;
 }
 
 /* ================== IMPROVED BOARD COLORS ================== */
@@ -188,7 +293,9 @@ h1 {
     justify-content: center;
     position: relative;
     transition: outline 0.2s ease, background 0.2s ease;
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 1 / 1 !important;
+    min-width: 0;
+    min-height: 0;
 }
 
 .square.light {
@@ -219,38 +326,20 @@ h1 {
     font-size: 2.4rem;
     font-weight: 900;
     color: rgba(0, 0, 0, 0.6);
-    text-shadow:
-        0 1px 2px rgba(255, 255, 255, 0.8),
-        0 0 2px rgba(0, 0, 0, 0.3);
     pointer-events: none;
     z-index: 0;
     user-select: none;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
-    font-family: 'Arial', sans-serif;
+    font-family: 'Segoe UI Symbol', 'Arial Unicode MS', Arial, sans-serif;
+    text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.5);
+    opacity: 0.8;
 }
 
-.symbol.highlight {
-    color: #d35400;
-    text-shadow:
-        0 0 8px rgba(211, 84, 0, 0.7),
-        0 2px 4px rgba(0, 0, 0, 0.4);
-    animation: pulseSymbol 0.8s ease-in-out;
-}
-
-@keyframes pulseSymbol {
-    0% {
-        transform: translate(-50%, -50%) scale(1);
-    }
-
-    50% {
-        transform: translate(-50%, -50%) scale(1.2);
-    }
-
-    100% {
-        transform: translate(-50%, -50%) scale(1);
-    }
+.square.dark .symbol {
+    color: rgba(255, 255, 255, 0.6);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 /* ================== PIECES ================== */
@@ -262,18 +351,30 @@ h1 {
     align-items: center;
     justify-content: center;
     transition: transform 0.15s ease, width 0.2s ease, height 0.2s ease;
-    cursor: pointer;
+    cursor: grab !important;
     outline: none;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
     position: relative;
+    /* Keep this for normal state */
     z-index: 1;
     font-weight: bold;
     font-size: 1.2rem;
     color: #fff;
+    /* Ensure the piece doesn't have any transforms that might interfere */
+    transform: none;
 }
 
-.piece:hover {
-    transform: scale(1.05);
+/* Enhanced dragging state */
+.piece.dragging {
+    position: fixed !important;
+    pointer-events: none;
+    z-index: 1000;
+    transform: translate(-50%, -50%) scale(1.1);
+    /* Center and slightly enlarge */
+    transition: none;
+    /* Remove transitions during drag */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    /* Add shadow for better visibility */
+    cursor: grabbing !important;
 }
 
 .piece.red {
@@ -288,7 +389,18 @@ h1 {
     border: 2px solid #0d3a66;
 }
 
-/* =============== KING STYLING (NO CROWN IMAGE) =============== */
+/* Enhanced piece number visibility */
+.piece-number {
+    pointer-events: none;
+    z-index: 2;
+    font-size: 1.2rem;
+    text-shadow:
+        1px 1px 2px rgba(0, 0, 0, 0.8),
+        -1px -1px 2px rgba(255, 255, 255, 0.3);
+    font-weight: 900;
+}
+
+/* =============== KING STYLING =============== */
 .piece.king {
     width: 88%;
     height: 88%;
@@ -302,17 +414,19 @@ h1 {
         var(--base-gradient);
 }
 
-.piece.king:hover {
-    transform: scale(1.07);
-    box-shadow:
-        0 0 12px rgba(255, 215, 0, 1),
-        0 0 20px rgba(255, 215, 0, 0.6),
-        0 4px 8px rgba(0, 0, 0, 0.3);
+.piece.king .piece-number {
+    color: gold;
+    text-shadow:
+        0 0 3px rgba(0, 0, 0, 0.8),
+        0 0 5px rgba(255, 215, 0, 0.5);
 }
 
 /* =============== PROMOTION ANIMATION =============== */
 .piece.promote {
-    animation: kingPromotion 0.6s ease-out;
+    box-shadow:
+        0 0 15px gold,
+        0 0 30px rgba(255, 215, 0, 0.8),
+        0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
 @keyframes kingPromotion {
@@ -321,7 +435,6 @@ h1 {
             0 0 0 gold,
             0 0 0 gold,
             0 2px 5px rgba(0, 0, 0, 0.25);
-        transform: scale(1);
     }
 
     50% {
@@ -329,7 +442,6 @@ h1 {
             0 0 15px gold,
             0 0 30px rgba(255, 215, 0, 0.8),
             0 4px 10px rgba(0, 0, 0, 0.3);
-        transform: scale(1.1);
     }
 
     100% {
@@ -337,45 +449,6 @@ h1 {
             0 0 8px rgba(255, 215, 0, 0.7),
             0 0 16px rgba(255, 215, 0, 0.4),
             0 2px 6px rgba(0, 0, 0, 0.2);
-        transform: scale(1.1);
-    }
-}
-
-.piece-number {
-    pointer-events: none;
-    z-index: 2;
-    font-size: 1.2rem;
-}
-
-/* ================== HIGHLIGHTS ================== */
-.square.valid-move {
-    outline: 3px solid rgba(255, 255, 0, 0.7);
-    transition: outline 0.2s ease;
-}
-
-.square.invalid-move {
-    animation: shake 0.3s;
-}
-
-@keyframes shake {
-    0% {
-        transform: translate(0);
-    }
-
-    25% {
-        transform: translate(-4px);
-    }
-
-    50% {
-        transform: translate(4px);
-    }
-
-    75% {
-        transform: translate(-4px);
-    }
-
-    100% {
-        transform: translate(0);
     }
 }
 
@@ -474,28 +547,136 @@ h1 {
     background: #a8a8a8;
 }
 
-/* Mobile adjustments */
-@media (max-width: 768px) {
-    .move-history-header {
-        font-size: 1em;
-        padding: 6px 8px;
-    }
+/* ================== ACTION BUTTONS UNDER MOVE HISTORY ================== */
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 0;
+}
 
-    .move-item {
-        padding: 4px 6px;
-        font-size: 0.85em;
-    }
+.action-buttons button {
+    padding: 8px 12px;
+    margin: 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    font-size: 0.9em;
+    min-width: 100px;
+    white-space: nowrap;
+    width: 100%;
+    box-sizing: border-box;
+    color: white;
+}
 
-    #move-history {
-        max-height: 22vh;
-    }
+/* Specific button colors */
+#surrender {
+    background: linear-gradient(145deg, #e74c3c, #c0392b);
+}
+
+#agree-finish {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+}
+
+#undo,
+#redo {
+    background: linear-gradient(145deg, #3498db, #2980b9);
+}
+
+#toggle-transparency {
+    background: linear-gradient(145deg, #9b59b6, #8e44ad);
+}
+
+#toggle-transparency.active {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+}
+
+/* ================== MOVE HIGHLIGHTING (Chess-style) ================== */
+.square.move-from {
+    background: rgba(33, 150, 243, 0.4) !important;
+    outline-offset: -1px;
+}
+
+.square.move-to {
+    background: rgba(244, 67, 54, 0.4) !important;
+    outline-offset: -1px;
+}
+
+/* Selected piece square background */
+.square.piece-selected {
+    background: rgba(128, 128, 128, 0.3) !important;
+}
+
+/* ================== PIECE INTERACTION STYLES ================== */
+.piece {
+    cursor: grab !important;
+}
+
+/* Valid move hints (gray circles) */
+.square.valid-move::after {
+    content: "";
+    position: absolute;
+    width: 75%;
+    height: 75%;
+    background: rgba(128, 128, 128, 0.3);
+    border-radius: 50%;
+    z-index: 1;
+}
+
+/* Drag/hover highlight (whiter border blend) */
+.square.piece-dragging {
+    background: rgba(255, 255, 255, 0.2) !important;
+    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline-offset: -1px;
+}
+
+/* Remove existing piece hover effects */
+.piece:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Center piece under cursor during drag */
+.piece.dragging {
+    position: fixed !important;
+    pointer-events: none;
+    z-index: 1000;
+    transform: translate(-50%, -50%);
+    /* Center on cursor */
+    margin: 0 !important;
 }
 
 /* ================== ACCESSIBILITY ================== */
-.piece:focus,
-button:focus {
-    outline: 3px solid #ff9800;
-    outline-offset: 2px;
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .piece {
+        border-width: 3px;
+    }
+
+    .symbol {
+        opacity: 1;
+        font-weight: 900;
+    }
+
+    .piece-number {
+        font-weight: 900;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
+    }
+}
+
+/* Piece transparency for symbol visibility */
+.piece.transparent {
+    opacity: 0.4;
+    background: rgba(0, 0, 0, 0.1) !important;
+    border-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+.piece.transparent .piece-number {
+    opacity: 0.6;
 }
 
 /* ================== RESPONSIVE DESIGN ================== */
@@ -525,6 +706,16 @@ button:focus {
 
     .symbol {
         font-size: 2rem;
+    }
+
+    .move-history-header {
+        font-size: 1em;
+        padding: 6px 8px;
+    }
+
+    .move-item {
+        padding: 4px 6px;
+        font-size: 0.85em;
     }
 }
 
@@ -559,21 +750,43 @@ button:focus {
     .symbol {
         font-size: 1.8rem;
     }
+
+    /* Better touch targets for mobile */
+    .piece {
+        width: 85%;
+        height: 85%;
+    }
+
+    /* Larger buttons for mobile */
+    #game-controls button,
+    .action-buttons button {
+        min-width: 80px;
+        padding: 10px 8px;
+        font-size: 0.8em;
+    }
+
+    /* Stack scoreboard vertically */
+    .scoreboard {
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+    }
 }
 
-/* Piece transparency for symbol visibility */
-.piece.transparent {
-    opacity: 0.4;
-    background: rgba(0, 0, 0, 0.1) !important;
-    border-color: rgba(0, 0, 0, 0.3) !important;
-}
+/* Print styles */
+@media print {
 
-.piece.transparent .piece-number {
-    opacity: 0.6;
-}
+    #game-controls,
+    .action-buttons {
+        display: none;
+    }
 
-/* Optional: Make transparency toggle button active state */
-#toggle-transparency.active {
-    background: #4CAF50;
-    color: white;
+    .game-container {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        max-width: none;
+    }
 }

@@ -2,6 +2,9 @@ const gameboard = document.getElementById("gameboard");
 const redScoreEl = document.getElementById("red-score");
 const blueScoreEl = document.getElementById("blue-score");
 const currentPlayerEl = document.getElementById("current-player");
+const gameStatusEl = document.getElementById("game-status");
+const errorMessageEl = document.getElementById("error-message");
+const loadingEl = document.getElementById("loading");
 
 let redScore = 0.0;
 let blueScore = 0.0;
@@ -25,7 +28,7 @@ let debugMode = false;
 let mustCaptureWithPiece = null;
 
 let moveHistoryStates = []; // Full board states for undo/redo
-let currentMoveIndex = -1;  // Current position in move history
+let currentMoveIndex = -1; // Current position in move history
 
 let replayMode = false;
 let replayInterval = null;
@@ -113,22 +116,76 @@ const DAMATH_LAYOUT = [
   ["", "+", "", "-", "", "÷", "", "x"],
 ];
 
+// ================== SOUND EFFECTS ==================
+const sounds = {
+  move: document.getElementById("move-sound"),
+  capture: document.getElementById("capture-sound"),
+  promotion: document.getElementById("move-promotion001"),
+  gameStart: document.getElementById("game-start"),
+  gameEnd: document.getElementById("game-end"),
+};
+
+function playSound(soundName) {
+  const sound = sounds[soundName];
+  if (sound) {
+    sound.currentTime = 0;
+    sound.play().catch((e) => console.log("Audio play failed:", e));
+  }
+}
+
+// ================== GAME STATUS MESSAGES ==================
+function showErrorMessage(message) {
+  if (!errorMessageEl) return;
+
+  errorMessageEl.textContent = message;
+  errorMessageEl.hidden = false;
+
+  setTimeout(() => {
+    errorMessageEl.hidden = true;
+  }, 5000);
+}
+
+function showLoading(show) {
+  if (!loadingEl) return;
+  loadingEl.hidden = !show;
+}
+
 // ================== BOARD GENERATION ==================
-for (let row = 0; row < 8; row++) {
-  for (let col = 0; col < 8; col++) {
-    const square = document.createElement("div");
-    const isLight = (row + col) % 2 === 0;
-    square.classList.add("square", isLight ? "light" : "dark");
-    square.dataset.row = row;
-    square.dataset.col = col;
+function initializeBoard() {
+  showLoading(true);
 
-    if (isLight) square.classList.add("playable");
+  try {
+    gameboard.innerHTML = "";
 
-    const symbol = document.createElement("span");
-    symbol.classList.add("symbol");
-    symbol.textContent = DAMATH_LAYOUT[row][col];
-    square.appendChild(symbol);
-    gameboard.appendChild(square);
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const square = document.createElement("div");
+        const isLight = (row + col) % 2 === 0;
+        square.classList.add("square", isLight ? "light" : "dark");
+        square.dataset.row = row;
+        square.dataset.col = col;
+        square.setAttribute(
+          "aria-label",
+          `Square ${row},${col} ${isLight ? "playable" : "dark"}`
+        );
+
+        if (isLight) square.classList.add("playable");
+
+        const symbol = document.createElement("span");
+        symbol.classList.add("symbol");
+        symbol.textContent = DAMATH_LAYOUT[row][col];
+        symbol.setAttribute("aria-hidden", "true");
+        square.appendChild(symbol);
+        gameboard.appendChild(square);
+      }
+    }
+
+    placeInitialPieces();
+  } catch (error) {
+    showErrorMessage("Failed to initialize board: " + error.message);
+    console.error("Board initialization error:", error);
+  } finally {
+    showLoading(false);
   }
 }
 
@@ -137,19 +194,45 @@ function getMathSymbol(row, col) {
   return DAMATH_LAYOUT[row][col];
 }
 
-function highlightSquareSymbol(row, col) {
-  document
-    .querySelectorAll(".symbol")
-    .forEach((sym) => sym.classList.remove("highlight"));
-  const square = document.querySelector(
-    `.square[data-row='${row}'][data-col='${col}']`
+// Highlight move squares
+function highlightMoveSquares(startRow, startCol, endRow, endCol) {
+  clearMoveHighlights();
+
+  const fromSquare = document.querySelector(
+    `.square[data-row='${startRow}'][data-col='${startCol}']`
   );
-  square?.querySelector(".symbol")?.classList.add("highlight");
+  const toSquare = document.querySelector(
+    `.square[data-row='${endRow}'][data-col='${endCol}']`
+  );
+
+  if (fromSquare) {
+    fromSquare.classList.add("move-from");
+    fromSquare.setAttribute(
+      "aria-label",
+      `${fromSquare.getAttribute("aria-label")} move from`
+    );
+  }
+  if (toSquare) {
+    toSquare.classList.add("move-to");
+    toSquare.setAttribute(
+      "aria-label",
+      `${toSquare.getAttribute("aria-label")} move to`
+    );
+  }
+
+  // Auto-clear highlights after 2 seconds
+  setTimeout(clearMoveHighlights, 2000);
 }
 
 function switchTurn() {
   currentPlayer = currentPlayer === "red" ? "blue" : "red";
   currentPlayerEl.textContent = currentPlayer;
+
+  // Update current player label for styling
+  const currentPlayerLabel = document.querySelector(".current-player-label");
+  if (currentPlayerLabel) {
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
 
   if (roundInterval) clearInterval(roundInterval);
   roundMinutes = 1;
@@ -200,38 +283,45 @@ function saveBoardState() {
     redScore: redScore,
     blueScore: blueScore,
     currentPlayer: currentPlayer,
-    mustCaptureWithPiece: mustCaptureWithPiece ? 
-      { row: parseInt(mustCaptureWithPiece.parentElement.dataset.row), 
-        col: parseInt(mustCaptureWithPiece.parentElement.dataset.col) } : null,
-    pieces: []
+    mustCaptureWithPiece: mustCaptureWithPiece
+      ? {
+          row: parseInt(mustCaptureWithPiece.parentElement.dataset.row),
+          col: parseInt(mustCaptureWithPiece.parentElement.dataset.col),
+        }
+      : null,
+    pieces: [],
   };
 
   // Save all pieces
-  document.querySelectorAll('.piece').forEach(piece => {
+  document.querySelectorAll(".piece").forEach((piece) => {
     const square = piece.parentElement;
     // Get the piece key from data-value or reconstruct it
     const value = piece.dataset.value;
-    const color = piece.classList.contains('red') ? 'red' : 'blue';
-    
+    const color = piece.classList.contains("red") ? "red" : "blue";
+
     // Find the original piece key from PIECES object
     let pieceKey = null;
     for (const key in PIECES) {
-      if (PIECES[key].color === color && PIECES[key].value.toString() === value) {
+      if (
+        PIECES[key].color === color &&
+        PIECES[key].value.toString() === value
+      ) {
         pieceKey = key;
         break;
       }
     }
     // Fallback if not found
     if (!pieceKey) {
-      pieceKey = color === 'red' ? `r${Math.abs(value)}` : `b${Math.abs(value)}`;
+      pieceKey =
+        color === "red" ? `r${Math.abs(value)}` : `b${Math.abs(value)}`;
     }
 
     state.pieces.push({
       key: pieceKey,
       row: parseInt(square.dataset.row),
       col: parseInt(square.dataset.col),
-      isKing: piece.classList.contains('king'),
-      value: value
+      isKing: piece.classList.contains("king"),
+      value: value,
     });
   });
 
@@ -241,25 +331,28 @@ function saveBoardState() {
 // Restore board state
 function restoreBoardState(state) {
   // Clear board
-  document.querySelectorAll('.piece').forEach(p => p.remove());
-  
+  document.querySelectorAll(".piece").forEach((p) => p.remove());
+
   // Restore pieces
-  state.pieces.forEach(pieceData => {
-    const square = document.querySelector(`.square[data-row='${pieceData.row}'][data-col='${pieceData.col}']`);
+  state.pieces.forEach((pieceData) => {
+    const square = document.querySelector(
+      `.square[data-row='${pieceData.row}'][data-col='${pieceData.col}']`
+    );
     if (!square) return;
 
     // Extract color from piece key (e.g., "r7" → "red", "b3" → "blue")
-    const color = pieceData.key.startsWith('r') ? 'red' : 'blue';
-    
-    const piece = document.createElement('div');
-    piece.classList.add('piece', color);
-    if (pieceData.isKing) piece.classList.add('king');
+    const color = pieceData.key.startsWith("r") ? "red" : "blue";
+
+    const piece = document.createElement("div");
+    piece.classList.add("piece", color);
+    if (pieceData.isKing) piece.classList.add("king");
     piece.dataset.value = pieceData.value;
     piece.draggable = true;
     piece.tabIndex = 0;
+    piece.setAttribute("aria-label", `${color} piece value ${pieceData.value}`);
 
-    const numberLabel = document.createElement('span');
-    numberLabel.classList.add('piece-number');
+    const numberLabel = document.createElement("span");
+    numberLabel.classList.add("piece-number");
     numberLabel.textContent = pieceData.value;
     piece.appendChild(numberLabel);
     square.appendChild(piece);
@@ -273,13 +366,21 @@ function restoreBoardState(state) {
   blueScoreEl.textContent = blueScore.toFixed(2);
   currentPlayerEl.textContent = currentPlayer;
 
+  // Update current player label for styling
+  const currentPlayerLabel = document.querySelector(".current-player-label");
+  if (currentPlayerLabel) {
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
+
   // Restore mustCaptureWithPiece
   mustCaptureWithPiece = null;
   if (state.mustCaptureWithPiece) {
     const { row, col } = state.mustCaptureWithPiece;
-    const square = document.querySelector(`.square[data-row='${row}'][data-col='${col}']`);
+    const square = document.querySelector(
+      `.square[data-row='${row}'][data-col='${col}']`
+    );
     if (square) {
-      mustCaptureWithPiece = square.querySelector('.piece');
+      mustCaptureWithPiece = square.querySelector(".piece");
     }
   }
 
@@ -289,8 +390,8 @@ function restoreBoardState(state) {
     if (roundInterval) clearInterval(roundInterval);
     roundMinutes = 1;
     roundSeconds = 0;
-    roundEl.className = 'timer';
-    roundEl.classList.add(currentPlayer === 'red' ? 'timer-red' : 'timer-blue');
+    roundEl.className = "timer";
+    roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
     startRoundTimer();
   }
 }
@@ -581,12 +682,22 @@ function updateMoveHistoryDOM() {
 
     let moveText = "";
     if (entry.type === "capture") {
+      // Determine color class based on score
+      let resultClass = "";
+      if (entry.result < 0) {
+        resultClass = "negative"; // Red color
+      } else if (entry.result > 0) {
+        resultClass = "positive"; // Green color
+      } else {
+        resultClass = "zero"; // Gray color for zero
+      }
+
       moveText = `
         <strong>${entry.player.toUpperCase()}</strong>: 
         ${entry.piece}(${entry.capturingValue}) 
         <span class="operator">${entry.operator}</span> 
         (${entry.capturedValue}) = 
-        <span class="result ${entry.result >= 0 ? "positive" : "negative"}">
+        <span class="result ${resultClass}">
           ${entry.result.toFixed(2)}
         </span>
       `;
@@ -668,6 +779,9 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     redScoreEl.textContent = redScore.toFixed(2);
     blueScoreEl.textContent = blueScore.toFixed(2);
 
+    // Play capture sound
+    playSound("capture");
+
     // ✅ LOG CAPTURE MOVE
     logMove({
       type: "capture",
@@ -681,6 +795,9 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
 
     capturedPieces.forEach((p) => p.remove());
   } else {
+    // Play move sound
+    playSound("move");
+
     // ✅ LOG REGULAR MOVE
     logMove({
       type: "move",
@@ -698,6 +815,9 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   );
   endSq.appendChild(piece);
 
+  // ✅ ADD THIS LINE TO ENABLE CHESS-STYLE HIGHLIGHTING:
+  highlightMoveSquares(startRow, startCol, endRow, endCol);
+
   // === KING PROMOTION ===
   let wasPromoted = false;
   if (!isKing) {
@@ -712,6 +832,9 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   }
 
   if (wasPromoted) {
+    // Play promotion sound
+    playSound("promotion");
+
     // ✅ LOG PROMOTION
     logMove({
       type: "promotion",
@@ -737,14 +860,18 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   moveHistoryStates.push(currentState);
   currentMoveIndex++;
 
-  // === VISUAL FEEDBACK ===
-  highlightSquareSymbol(endRow, endCol);
+  // ✅ ADD MOVE HIGHLIGHTING (works in replay mode too)
+  if (!replayMode) {
+    highlightMoveSquares(startRow, startCol, endRow, endCol);
+  }
+
   clearValidMoves();
 
   if (!timersStarted) {
     timersStarted = true;
     startSessionTimer();
     startRoundTimer();
+    playSound("gameStart");
   }
 
   setTimeout(() => checkGameOver(), 100);
@@ -790,9 +917,17 @@ function showValidMoves(piece, startRow, startCol) {
 }
 
 function clearValidMoves() {
+  // Remove valid move hints
+  document.querySelectorAll(".square.valid-move").forEach((sq) => {
+    sq.classList.remove("valid-move");
+  });
+
+  // Remove selection highlights
   document
-    .querySelectorAll(".square.valid-move")
-    .forEach((sq) => sq.classList.remove("valid-move"));
+    .querySelectorAll(".square.piece-dragging")
+    .forEach((sq) => {
+      sq.classList.remove("piece-dragging");
+    });
 }
 
 // ================== INPUT HANDLERS ==================
@@ -801,20 +936,26 @@ gameboard.addEventListener("click", (e) => {
   const square = e.target.closest(".square");
 
   if (!square || !square.classList.contains("playable")) return;
-  if (mustCaptureWithPiece && piece !== mustCaptureWithPiece) return;
 
+  // Only allow selecting current player's pieces
   if (piece && piece.classList.contains(currentPlayer)) {
-    if (selectedPiece) selectedPiece.classList.remove("selected");
-    selectedPiece = piece;
-    selectedPiece.classList.add("selected");
+    // Clear previous selection
+    document.querySelectorAll(".square.piece-selected").forEach((sq) => {
+      sq.classList.remove("piece-selected");
+    });
 
-    const startSq = piece.parentElement;
-    const startRow = parseInt(startSq.dataset.row, 10);
-    const startCol = parseInt(startSq.dataset.col, 10);
+    // Select new piece
+    selectedPiece = piece;
+    const pieceSquare = piece.parentElement;
+
+    // Show valid moves
+    const startRow = parseInt(pieceSquare.dataset.row, 10);
+    const startCol = parseInt(pieceSquare.dataset.col, 10);
     showValidMoves(piece, startRow, startCol);
     return;
   }
 
+  // Handle move attempt
   if (selectedPiece && square) {
     const startSq = selectedPiece.parentElement;
     const startRow = parseInt(startSq.dataset.row, 10);
@@ -824,31 +965,53 @@ gameboard.addEventListener("click", (e) => {
 
     if (isValidMove(selectedPiece, startRow, startCol, endRow, endCol)) {
       performMove(selectedPiece, startRow, startCol, endRow, endCol);
-    } else if (playerHasMandatoryCapture(currentPlayer)) {
-      square.classList.add("invalid-move");
-      setTimeout(() => square.classList.remove("invalid-move"), 300);
+    } else {
     }
-
-    if (selectedPiece) selectedPiece.classList.remove("selected");
-    selectedPiece = null;
+    // Remove selection after move attempt (valid or invalid)
+    if (selectedPiece) {
+      selectedPiece = null;
+    }
+    clearValidMoves();
   }
 });
 
 gameboard.addEventListener("dragstart", (e) => {
   const piece = e.target.closest(".piece");
-  if (!piece || !piece.classList.contains(currentPlayer)) e.preventDefault();
-  else selectedPiece = piece;
+  if (!piece || !piece.classList.contains(currentPlayer)) {
+    e.preventDefault();
+    return;
+  }
+
+  selectedPiece = piece;
+  const pieceSquare = piece.parentElement;
+
+  // Add dragging highlight
+  pieceSquare.classList.add("piece-dragging");
+
+  // Show valid moves
+  const startRow = parseInt(pieceSquare.dataset.row, 10);
+  const startCol = parseInt(pieceSquare.dataset.col, 10);
+  showValidMoves(piece, startRow, startCol);
 });
 
-gameboard.addEventListener("dragover", (e) => e.preventDefault());
+gameboard.addEventListener("dragend", (e) => {
+  if (selectedPiece) {
+    // Remove dragging highlight
+    selectedPiece.parentElement.classList.remove("piece-dragging");
+    selectedPiece = null;
+    clearValidMoves();
+  }
+});
+
+gameboard.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  // Optional: Add hover effect on valid drop targets
+});
 
 gameboard.addEventListener("drop", (e) => {
   e.preventDefault();
   const square = e.target.closest(".square");
-  if (!square || !square.classList.contains("playable") || !selectedPiece)
-    return;
-  if (mustCaptureWithPiece && selectedPiece !== mustCaptureWithPiece) {
-    selectedPiece = null;
+  if (!square || !square.classList.contains("playable") || !selectedPiece) {
     return;
   }
 
@@ -860,13 +1023,14 @@ gameboard.addEventListener("drop", (e) => {
 
   if (isValidMove(selectedPiece, startRow, startCol, endRow, endCol)) {
     performMove(selectedPiece, startRow, startCol, endRow, endCol);
-  } else if (playerHasMandatoryCapture(currentPlayer)) {
-    square.classList.add("invalid-move");
-    setTimeout(() => square.classList.remove("invalid-move"), 300);
-  }
+  } 
 
-  if (selectedPiece) selectedPiece.classList.remove("selected");
-  selectedPiece = null;
+  // Clean up
+  if (selectedPiece) {
+    selectedPiece.parentElement.classList.remove("piece-dragging");
+    selectedPiece = null;
+  }
+  clearValidMoves();
 });
 
 // ================== TIMERS ==================
@@ -936,6 +1100,11 @@ function placeInitialPieces() {
     piece.setAttribute("tabindex", "0");
     piece.draggable = true;
     piece.dataset.value = pieceData.value;
+    piece.setAttribute(
+      "aria-label",
+      `${pieceData.color} piece value ${pieceData.value}`
+    );
+
     const label = document.createElement("span");
     label.classList.add("piece-number");
     label.textContent = pieceData.value;
@@ -974,10 +1143,15 @@ function resetGame() {
   updateTimerDisplay();
 
   // Reset unified state system
-  gameStates = [];
-  currentStateIndex = -1;
+  moveHistoryStates = [];
+  currentMoveIndex = -1;
+  moveHistoryEntries = [];
+  currentHistoryIndex = -1;
   replayMode = false;
   if (replayInterval) clearInterval(replayInterval);
+
+  // Clear status messages
+  if (errorMessageEl) errorMessageEl.hidden = true;
 
   placeInitialPieces();
 }
@@ -989,7 +1163,7 @@ function setupDebugControls() {
   toggle?.addEventListener("click", () => {
     debugMode = !debugMode;
     toggle.textContent = `Debug Mode: ${debugMode ? "ON" : "OFF"}`;
-    toggle.style.background = debugMode ? "#51cf66" : "#ff6b6b";
+    toggle.classList.toggle("debug-on", debugMode);
     resetGame();
   });
 
@@ -1001,17 +1175,8 @@ function setupDebugControls() {
       if (sessionInterval) clearInterval(sessionInterval);
       if (roundInterval) clearInterval(roundInterval);
 
-      const finalScores = calculateFinalScores();
-
-      let winner = "It's a tie!";
-      if (finalScores.red > finalScores.blue) winner = "Red wins!";
-      else if (finalScores.blue > finalScores.red) winner = "Blue wins!";
-
-      alert(
-        `Game ended!\n\nFinal Scores:\nRed: ${finalScores.red.toFixed(
-          2
-        )}\nBlue: ${finalScores.blue.toFixed(2)}\n\n${winner}`
-      );
+      // Just call endGame() directly
+      endGame("Game ended manually");
     });
   }
 
@@ -1038,6 +1203,7 @@ function setupDebugControls() {
       }
     });
   }
+
   // Undo/Redo/Replay buttons
   const undoBtn = document.getElementById("undo");
   const redoBtn = document.getElementById("redo");
@@ -1145,38 +1311,22 @@ function endGame(reason) {
   if (sessionInterval) clearInterval(sessionInterval);
   if (roundInterval) clearInterval(roundInterval);
 
-  // Calculate final scores: add remaining pieces' values
-  const redPieces = document.querySelectorAll(".piece.red");
-  const bluePieces = document.querySelectorAll(".piece.blue");
+  // Play game end sound
+  playSound("gameEnd");
 
-  let redRemaining = 0;
-  redPieces.forEach((piece) => {
-    const value = parseFloat(piece.dataset.value);
-    if (!isNaN(value)) redRemaining += value;
-  });
-
-  let blueRemaining = 0;
-  bluePieces.forEach((piece) => {
-    const value = parseFloat(piece.dataset.value);
-    if (!isNaN(value)) blueRemaining += value;
-  });
-
-  // Add remaining values to current scores
-  redScore += redRemaining;
-  blueScore += blueRemaining;
-
-  // Format scores to 2 decimal places (DepEd compliant)
-  const finalRed = redScore.toFixed(2);
-  const finalBlue = blueScore.toFixed(2);
+  // === USE calculateFinalScores() INSTEAD ===
+  const finalScores = calculateFinalScores();
+  const finalRed = finalScores.red.toFixed(2);
+  const finalBlue = finalScores.blue.toFixed(2);
 
   // Determine winner based on final scores
   let winnerMessage = "";
-  const redNum = parseFloat(finalRed);
-  const blueNum = parseFloat(finalBlue);
+  const redScore = parseFloat(finalRed);
+  const blueScore = parseFloat(finalBlue);
 
-  if (redNum > blueNum) {
+  if (redScore < blueScore) {
     winnerMessage = "Red wins!";
-  } else if (blueNum > redNum) {
+  } else if (blueScore < redScore) {
     winnerMessage = "Blue wins!";
   } else {
     winnerMessage = "It's a draw!";
@@ -1189,25 +1339,18 @@ function endGame(reason) {
     `Final Scores:\n` +
     `Red: ${finalRed}\n` +
     `Blue: ${finalBlue}\n\n` +
-    `${winnerMessage}\n\n` +
-    `Remaining pieces added:\n` +
-    `Red: ${redRemaining.toFixed(2)}\n` +
-    `Blue: ${blueRemaining.toFixed(2)}`;
+    `${winnerMessage}`;
 
   // Show alert and log to console
   alert(finalMessage);
   console.log("Game Over:", reason);
   console.log("Final Scores - Red:", finalRed, "Blue:", finalBlue);
-  console.log(
-    "Remaining values - Red:",
-    redRemaining.toFixed(2),
-    "Blue:",
-    blueRemaining.toFixed(2)
-  );
 }
 
 function undoMove() {
-  if (gameOver || replayMode || currentMoveIndex <= 0) return;
+  if (gameOver || replayMode || currentMoveIndex <= 0) {
+    return;
+  }
 
   currentMoveIndex--;
   restoreBoardState(moveHistoryStates[currentMoveIndex]);
@@ -1223,8 +1366,9 @@ function redoMove() {
     gameOver ||
     replayMode ||
     currentMoveIndex >= moveHistoryStates.length - 1
-  )
+  ) {
     return;
+  }
 
   currentMoveIndex++;
   restoreBoardState(moveHistoryStates[currentMoveIndex]);
@@ -1235,10 +1379,15 @@ function redoMove() {
 }
 
 function startReplay(speed = 1000) {
-  if (moveHistoryStates.length === 0) return;
+  if (moveHistoryStates.length === 0) {
+    return;
+  }
 
   replayMode = true;
   let replayIndex = 0;
+
+  // Clear any existing highlights
+  clearMoveHighlights();
 
   replayInterval = setInterval(() => {
     if (replayIndex >= moveHistoryStates.length) {
@@ -1276,6 +1425,85 @@ function togglePieceTransparency() {
   }
 }
 
-// INIT
-setupDebugControls();
-placeInitialPieces();
+// Clear move highlights
+function clearMoveHighlights() {
+  document
+    .querySelectorAll(".square.move-from, .square.move-to")
+    .forEach((sq) => {
+      sq.classList.remove("move-from", "move-to");
+      // Reset aria-label to remove move annotations
+      const baseLabel = sq.classList.contains("light") ? "playable" : "dark";
+      sq.setAttribute(
+        "aria-label",
+        `Square ${sq.dataset.row},${sq.dataset.col} ${baseLabel}`
+      );
+    });
+}
+
+// Highlight move squares
+function highlightMoveSquares(startRow, startCol, endRow, endCol) {
+  clearMoveHighlights();
+
+  const fromSquare = document.querySelector(
+    `.square[data-row='${startRow}'][data-col='${startCol}']`
+  );
+  const toSquare = document.querySelector(
+    `.square[data-row='${endRow}'][data-col='${endCol}']`
+  );
+
+  if (fromSquare) {
+    fromSquare.classList.add("move-from");
+    fromSquare.setAttribute(
+      "aria-label",
+      `${fromSquare.getAttribute("aria-label")} move from`
+    );
+  }
+  if (toSquare) {
+    toSquare.classList.add("move-to");
+    toSquare.setAttribute(
+      "aria-label",
+      `${toSquare.getAttribute("aria-label")} move to`
+    );
+  }
+}
+
+// ================== KEYBOARD NAVIGATION ==================
+document.addEventListener("keydown", (e) => {
+  // Space bar to select/deselect piece
+  if (e.code === "Space" && selectedPiece) {
+    clearValidMoves();
+    selectedPiece.parentElement.classList.remove("piece-selected");
+    selectedPiece = null;
+    e.preventDefault();
+  }
+
+  // Escape to clear selection
+  if (e.code === "Escape") {
+    clearValidMoves();
+    if (selectedPiece) {
+      selectedPiece.parentElement.classList.remove("piece-selected");
+      selectedPiece = null;
+    }
+  }
+});
+
+// ================== INITIALIZATION ==================
+document.addEventListener("DOMContentLoaded", () => {
+  // Set initial current player styling
+  const currentPlayerLabel = document.querySelector(".current-player-label");
+  if (currentPlayerLabel) {
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
+
+  initializeBoard();
+  setupDebugControls();
+});
+
+// Export for testing if needed
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    calculateSciDamathScore,
+    isValidMove,
+    playerHasMandatoryCapture,
+  };
+}
