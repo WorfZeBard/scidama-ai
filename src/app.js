@@ -8,7 +8,8 @@ let blueScore = 0.0;
 let currentPlayer = "red";
 let selectedPiece = null;
 
-let gameOver = false;
+let moveHistoryEntries = []; // Track move history entries for undo/redo
+let currentHistoryIndex = -1; // Current position in move history
 let moveHistory = []; // For repetition detection
 let surrenderRequested = null; // "red", "blue", or null
 
@@ -25,8 +26,10 @@ let mustCaptureWithPiece = null;
 
 let moveHistoryStates = []; // Full board states for undo/redo
 let currentMoveIndex = -1;  // Current position in move history
-let replayMode = false;     // Whether we're in replay mode
-let replayInterval = null;  // For auto-replay
+
+let replayMode = false;
+let replayInterval = null;
+let gameOver = false;
 
 // ================== INITIAL SETUP (LIGHT SQUARES) ==================
 let INITIAL_SETUP = {
@@ -204,12 +207,29 @@ function saveBoardState() {
   // Save all pieces
   document.querySelectorAll('.piece').forEach(piece => {
     const square = piece.parentElement;
+    // Get the piece key from data-value or reconstruct it
+    const value = piece.dataset.value;
+    const color = piece.classList.contains('red') ? 'red' : 'blue';
+    
+    // Find the original piece key from PIECES object
+    let pieceKey = null;
+    for (const key in PIECES) {
+      if (PIECES[key].color === color && PIECES[key].value.toString() === value) {
+        pieceKey = key;
+        break;
+      }
+    }
+    // Fallback if not found
+    if (!pieceKey) {
+      pieceKey = color === 'red' ? `r${Math.abs(value)}` : `b${Math.abs(value)}`;
+    }
+
     state.pieces.push({
-      key: Array.from(piece.classList).find(cls => cls.match(/^[rb]\d+$/)),
+      key: pieceKey,
       row: parseInt(square.dataset.row),
       col: parseInt(square.dataset.col),
       isKing: piece.classList.contains('king'),
-      value: piece.dataset.value
+      value: value
     });
   });
 
@@ -226,8 +246,11 @@ function restoreBoardState(state) {
     const square = document.querySelector(`.square[data-row='${pieceData.row}'][data-col='${pieceData.col}']`);
     if (!square) return;
 
+    // Extract color from piece key (e.g., "r7" → "red", "b3" → "blue")
+    const color = pieceData.key.startsWith('r') ? 'red' : 'blue';
+    
     const piece = document.createElement('div');
-    piece.classList.add('piece', pieceData.key.split(/(\d+)/)[0]); // 'r' or 'b'
+    piece.classList.add('piece', color);
     if (pieceData.isKing) piece.classList.add('king');
     piece.dataset.value = pieceData.value;
     piece.draggable = true;
@@ -253,7 +276,9 @@ function restoreBoardState(state) {
   if (state.mustCaptureWithPiece) {
     const { row, col } = state.mustCaptureWithPiece;
     const square = document.querySelector(`.square[data-row='${row}'][data-col='${col}']`);
-    mustCaptureWithPiece = square?.querySelector('.piece');
+    if (square) {
+      mustCaptureWithPiece = square.querySelector('.piece');
+    }
   }
 
   // Update UI
@@ -511,74 +536,89 @@ function checkForChainCapture(piece, row, col) {
 
 // ================== MOVE HISTORY ==================
 function logMove(moveData) {
+  if (replayMode) return; // Don't log during replay
+
+  // Create move entry
+  const moveEntry = {
+    type: moveData.type,
+    player: moveData.player,
+    piece: moveData.piece,
+    capturingValue: moveData.capturingValue,
+    operator: moveData.operator,
+    capturedValue: moveData.capturedValue,
+    result: moveData.result,
+    value: moveData.value,
+    endRow: moveData.endRow,
+    endCol: moveData.endCol,
+  };
+
+  // Truncate future entries if we're in the middle of history
+  moveHistoryEntries = moveHistoryEntries.slice(0, currentHistoryIndex + 1);
+
+  // Add new entry
+  moveHistoryEntries.push(moveEntry);
+  currentHistoryIndex++;
+
+  // Update DOM
+  updateMoveHistoryDOM();
+}
+
+// New function to update move history DOM based on current index
+function updateMoveHistoryDOM() {
   const historyList = document.getElementById("move-history-content");
+  if (!historyList) return;
+
+  // Clear current history
+  historyList.innerHTML = "";
+
+  // Add entries up to current index
+  for (let i = 0; i <= currentHistoryIndex; i++) {
+    const entry = moveHistoryEntries[i];
+    const moveItem = document.createElement("li");
+    moveItem.className = `move-item ${entry.player}`;
+
+    let moveText = "";
+    if (entry.type === "capture") {
+      moveText = `
+        <strong>${entry.player.toUpperCase()}</strong>: 
+        ${entry.piece}(${entry.capturingValue}) 
+        <span class="operator">${entry.operator}</span> 
+        (${entry.capturedValue}) = 
+        <span class="result ${entry.result >= 0 ? "positive" : "negative"}">
+          ${entry.result.toFixed(2)}
+        </span>
+      `;
+    } else if (entry.type === "move") {
+      moveText = `
+        <strong>${entry.player.toUpperCase()}</strong>: 
+        ${entry.piece}(${entry.value}) moved to (${entry.endRow},${
+        entry.endCol
+      })
+      `;
+    } else if (entry.type === "promotion") {
+      moveText = `
+        <strong>${entry.player.toUpperCase()}</strong>: 
+        ${entry.piece} promoted to DAMA!
+      `;
+    }
+
+    moveItem.innerHTML = moveText;
+    historyList.appendChild(moveItem);
+  }
+
+  // Auto-scroll to bottom
   const scrollableContainer = document.querySelector(
     ".move-history-scrollable"
   );
-
-  if (!historyList || !scrollableContainer) return;
-
-  const moveItem = document.createElement("li");
-  moveItem.className = `move-item ${moveData.player}`;
-
-  let moveText = "";
-
-  if (moveData.type === "capture") {
-    moveText = `
-      <strong>${moveData.player.toUpperCase()}</strong>: 
-      ${moveData.piece}(${moveData.capturingValue}) 
-      <span class="operator">${moveData.operator}</span> 
-      (${moveData.capturedValue}) = 
-      <span class="result ${moveData.result >= 0 ? "positive" : "negative"}">
-        ${moveData.result.toFixed(2)}
-      </span>
-    `;
-  } else if (moveData.type === "move") {
-    moveText = `
-      <strong>${moveData.player.toUpperCase()}</strong>: 
-      ${moveData.piece}(${moveData.value}) moved to (${moveData.endRow},${
-      moveData.endCol
-    })
-    `;
-  } else if (moveData.type === "promotion") {
-    moveText = `
-      <strong>${moveData.player.toUpperCase()}</strong>: 
-      ${moveData.piece} promoted to DAMA!
-    `;
+  if (scrollableContainer) {
+    scrollableContainer.scrollTop = scrollableContainer.scrollHeight;
   }
-
-  moveItem.innerHTML = moveText;
-  historyList.appendChild(moveItem);
-
-  // Auto-scroll to bottom
-  scrollableContainer.scrollTop = scrollableContainer.scrollHeight;
 }
 
 // ================== PERFORM MOVE ==================
 function performMove(piece, startRow, startCol, endRow, endCol) {
   if (gameOver || replayMode) return;
 
-  // Save current state BEFORE the move (for undo)
-  if (!replayMode) {
-    const prevState = saveBoardState();
-    // Truncate future states if we're in the middle of history
-    moveHistoryStates = moveHistoryStates.slice(0, currentMoveIndex + 1);
-    moveHistoryStates.push(prevState);
-    currentMoveIndex++;
-  }
-
-  // Prevent moves if game is already over
-  if (gameOver) return;
-
-  const startSq = document.querySelector(
-    `.square[data-row='${startRow}'][data-col='${startCol}']`
-  );
-  const endSq = document.querySelector(
-    `.square[data-row='${endRow}'][data-col='${endCol}']`
-  );
-
-  let capturedPieces = [];
-  const isKing = piece.classList.contains("king");
   const color = piece.classList.contains("red") ? "red" : "blue";
   const pieceKey =
     Array.from(piece.classList).find((cls) => cls.match(/^[rb]\d+$/)) ||
@@ -586,6 +626,9 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   const pieceValue = parseInt(piece.dataset.value, 10);
 
   // === CAPTURE DETECTION ===
+  let capturedPieces = [];
+  const isKing = piece.classList.contains("king");
+
   if (isKing) {
     capturedPieces = findCapturedPieces(
       startRow,
@@ -612,7 +655,6 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   let operator = "";
   let capturedValue = 0;
 
-  // === SCI-DAMATH SCORING ===
   if (capturedPieces.length > 0) {
     operator = getMathSymbol(endRow, endCol);
     capturedValue = parseInt(capturedPieces[0].dataset.value, 10);
@@ -621,11 +663,10 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     if (color === "red") redScore += scoreChange;
     else blueScore += scoreChange;
 
-    // Update UI with 2 decimal places
     redScoreEl.textContent = redScore.toFixed(2);
     blueScoreEl.textContent = blueScore.toFixed(2);
 
-    // Log capture move
+    // ✅ LOG CAPTURE MOVE
     logMove({
       type: "capture",
       player: color,
@@ -638,7 +679,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
 
     capturedPieces.forEach((p) => p.remove());
   } else {
-    // Log regular move
+    // ✅ LOG REGULAR MOVE
     logMove({
       type: "move",
       player: color,
@@ -649,31 +690,11 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     });
   }
 
-  // === RECORD MOVE FOR REPETITION DETECTION (single chip scenario) ===
-  if (document.querySelectorAll(".piece").length <= 2) {
-    const moveKey = `${startRow},${startCol}->${endRow},${endCol}`;
-    moveHistory.push(moveKey);
-    // Keep only last 6 moves for 3-repetition check
-    if (moveHistory.length > 6) moveHistory.shift();
-  }
-
   // === MOVE THE PIECE ===
+  const endSq = document.querySelector(
+    `.square[data-row='${endRow}'][data-col='${endCol}']`
+  );
   endSq.appendChild(piece);
-
-  // === CHAIN CAPTURE LOGIC ===
-  if (
-    capturedPieces.length > 0 &&
-    checkForChainCapture(piece, endRow, endCol)
-  ) {
-    mustCaptureWithPiece = piece;
-    // Check game over immediately for chain capture scenarios
-    setTimeout(() => checkGameOver(), 100);
-  } else {
-    mustCaptureWithPiece = null;
-    switchTurn();
-    // Check game over after turn switch
-    setTimeout(() => checkGameOver(), 100);
-  }
 
   // === KING PROMOTION ===
   let wasPromoted = false;
@@ -689,6 +710,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   }
 
   if (wasPromoted) {
+    // ✅ LOG PROMOTION
     logMove({
       type: "promotion",
       player: color,
@@ -696,23 +718,34 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     });
   }
 
+  // === CHAIN CAPTURE LOGIC ===
+  if (
+    capturedPieces.length > 0 &&
+    checkForChainCapture(piece, endRow, endCol)
+  ) {
+    mustCaptureWithPiece = piece;
+  } else {
+    mustCaptureWithPiece = null;
+    switchTurn();
+  }
+
+  // === SAVE BOARD STATE FOR UNDO/REDO (SIMPLE VERSION) ===
+  moveHistoryStates = moveHistoryStates.slice(0, currentMoveIndex + 1);
+  const currentState = saveBoardState();
+  moveHistoryStates.push(currentState);
+  currentMoveIndex++;
+
   // === VISUAL FEEDBACK ===
   highlightSquareSymbol(endRow, endCol);
   clearValidMoves();
 
-  // === START TIMERS ON FIRST MOVE ===
   if (!timersStarted) {
     timersStarted = true;
     startSessionTimer();
     startRoundTimer();
   }
 
-  // After move completion, save the new state
-  if (!replayMode) {
-    const newState = saveBoardState();
-    moveHistoryStates.push(newState);
-    currentMoveIndex++;
-  }
+  setTimeout(() => checkGameOver(), 100);
 }
 
 // ================== KING PROMOTION (NO IMAGE) ==================
@@ -887,24 +920,20 @@ function updateTimerDisplay() {
 function placeInitialPieces() {
   document.querySelectorAll(".piece").forEach((p) => p.remove());
   const setup = debugMode ? DEBUG_SETUP : INITIAL_SETUP;
-
   for (const pos in setup) {
     const [row, col] = pos.split(",").map(Number);
     const pieceKey = setup[pos];
     const pieceData = PIECES[pieceKey];
     if (!pieceData) continue;
-
     const square = document.querySelector(
       `.square[data-row='${row}'][data-col='${col}']`
     );
     if (!square || !square.classList.contains("playable")) continue;
-
     const piece = document.createElement("div");
     piece.classList.add("piece", pieceData.color);
     piece.setAttribute("tabindex", "0");
     piece.draggable = true;
     piece.dataset.value = pieceData.value;
-
     const label = document.createElement("span");
     label.classList.add("piece-number");
     label.textContent = pieceData.value;
@@ -912,14 +941,14 @@ function placeInitialPieces() {
     square.appendChild(piece);
   }
 
-  if (debugMode) makeDebugKings();
-
-  // Save initial state
+  // Initialize simple state system
   setTimeout(() => {
     const initialState = saveBoardState();
     moveHistoryStates = [initialState];
     currentMoveIndex = 0;
-  }, 100);
+    currentHistoryIndex = -1;
+    updateMoveHistoryDOM();
+  }, 50);
 }
 
 function resetGame() {
@@ -931,31 +960,24 @@ function resetGame() {
   currentPlayerEl.textContent = "red";
   mustCaptureWithPiece = null;
   selectedPiece = null;
+  gameOver = false;
 
   if (sessionInterval) clearInterval(sessionInterval);
   if (roundInterval) clearInterval(roundInterval);
   timersStarted = false;
-
   sessionMinutes = 20;
   sessionSeconds = 0;
   roundMinutes = 1;
   roundSeconds = 0;
   updateTimerDisplay();
 
-  placeInitialPieces();
-
-  // Reset state tracking
-  moveHistoryStates = [];
-  currentMoveIndex = -1;
+  // Reset unified state system
+  gameStates = [];
+  currentStateIndex = -1;
   replayMode = false;
   if (replayInterval) clearInterval(replayInterval);
 
-  // Re-initialize after pieces are placed
-  setTimeout(() => {
-    const initialState = saveBoardState();
-    moveHistoryStates = [initialState];
-    currentMoveIndex = 0;
-  }, 100);
+  placeInitialPieces();
 }
 
 function setupDebugControls() {
@@ -1180,47 +1202,44 @@ function endGame(reason) {
 function undoMove() {
   if (gameOver || replayMode || currentMoveIndex <= 0) return;
 
-  // Go back 2 states (to before the move)
-  currentMoveIndex -= 2;
-  if (currentMoveIndex < 0) currentMoveIndex = 0;
-
+  currentMoveIndex--;
   restoreBoardState(moveHistoryStates[currentMoveIndex]);
-  gameOver = false; // Allow game to continue
+
+  // Update move history to match
+  currentHistoryIndex = currentMoveIndex - 1;
+  if (currentHistoryIndex < -1) currentHistoryIndex = -1;
+  updateMoveHistoryDOM();
 }
 
 function redoMove() {
   if (
     gameOver ||
     replayMode ||
-    currentMoveIndex >= moveHistoryStates.length - 2
+    currentMoveIndex >= moveHistoryStates.length - 1
   )
     return;
 
-  // Go forward 2 states (to after the move)
-  currentMoveIndex += 2;
-  if (currentMoveIndex >= moveHistoryStates.length) {
-    currentMoveIndex = moveHistoryStates.length - 1;
-  }
-
+  currentMoveIndex++;
   restoreBoardState(moveHistoryStates[currentMoveIndex]);
-  gameOver = false;
+
+  // Update move history to match
+  currentHistoryIndex = currentMoveIndex - 1;
+  updateMoveHistoryDOM();
 }
 
 function startReplay(speed = 1000) {
   if (moveHistoryStates.length === 0) return;
 
   replayMode = true;
-  currentMoveIndex = 0;
-  restoreBoardState(moveHistoryStates[0]);
+  let replayIndex = 0;
 
-  let step = 1;
   replayInterval = setInterval(() => {
-    if (step >= moveHistoryStates.length) {
+    if (replayIndex >= moveHistoryStates.length) {
       stopReplay();
       return;
     }
-    restoreBoardState(moveHistoryStates[step]);
-    step++;
+    restoreBoardState(moveHistoryStates[replayIndex]);
+    replayIndex++;
   }, speed);
 }
 

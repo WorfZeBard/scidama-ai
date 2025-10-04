@@ -17,34 +17,36 @@ h1 {
     text-align: center;
 }
 
-/* ================== DEBUG CONTROLS ================== */
-#debug-controls {
+/* ================== GAME CONTROLS ================== */
+#game-controls {
     background: rgba(255, 255, 255, 0.9);
     padding: 10px;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    max-width: 95vw;
 }
 
-#debug-controls button {
-    padding: 8px 16px;
-    margin: 0 5px;
+#game-controls button {
+    padding: 8px 12px;
+    margin: 0;
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-weight: bold;
     transition: all 0.3s ease;
+    font-size: 0.9em;
+    min-width: 100px;
+    white-space: nowrap;
 }
 
-#debug-controls button:hover {
+#game-controls button:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-#status {
-    font-weight: bold;
-    font-size: 1.2em;
-    margin-bottom: 10px;
 }
 
 /* ================== GAME LAYOUT ================== */
@@ -71,7 +73,6 @@ h1 {
     margin-bottom: 15px;
     transition: all 0.2s ease;
     user-select: none;
-    /* Prevent board text selection */
 }
 
 /* Sidebar */
@@ -187,18 +188,16 @@ h1 {
     justify-content: center;
     position: relative;
     transition: outline 0.2s ease, background 0.2s ease;
+    aspect-ratio: 1 / 1;
 }
 
 .square.light {
     background: #f0e6c8;
-    /* Warm off-white - higher contrast */
     border: 1px solid #d4c19c;
-    /* Subtle grid lines */
 }
 
 .square.dark {
     background: #5d8a3d;
-    /* Rich, dark green */
     pointer-events: none;
     opacity: 0.5;
     cursor: default;
@@ -218,11 +217,8 @@ h1 {
     left: 50%;
     transform: translate(-50%, -50%);
     font-size: 2.4rem;
-    /* Larger */
     font-weight: 900;
-    /* Extra bold */
     color: rgba(0, 0, 0, 0.6);
-    /* Higher contrast */
     text-shadow:
         0 1px 2px rgba(255, 255, 255, 0.8),
         0 0 2px rgba(0, 0, 0, 0.3);
@@ -237,7 +233,6 @@ h1 {
 
 .symbol.highlight {
     color: #d35400;
-    /* Warm orange */
     text-shadow:
         0 0 8px rgba(211, 84, 0, 0.7),
         0 2px 4px rgba(0, 0, 0, 0.4);
@@ -281,7 +276,6 @@ h1 {
     transform: scale(1.05);
 }
 
-/* Base colors with CSS variables for kings */
 .piece.red {
     --base-gradient: linear-gradient(145deg, #e57373, #c62828);
     background: var(--base-gradient);
@@ -347,7 +341,6 @@ h1 {
     }
 }
 
-/* Piece number (always on top) */
 .piece-number {
     pointer-events: none;
     z-index: 2;
@@ -396,10 +389,8 @@ h1 {
     margin-bottom: 15px;
     height: 100%;
     max-height: 25vh;
-    /* Keeps it compact */
 }
 
-/* Fixed header at the top */
 .move-history-header {
     margin: 0;
     padding: 8px 10px;
@@ -411,16 +402,13 @@ h1 {
     font-weight: bold;
 }
 
-/* Scrollable moves container */
 .move-history-scrollable {
     flex: 1;
     min-height: 0;
-    /* Critical for flex scrolling */
     overflow-y: auto;
     padding: 0 8px;
 }
 
-/* Moves list */
 #move-history-content {
     padding: 8px 0;
     margin: 0;
@@ -535,7 +523,6 @@ button:focus {
         max-height: 150px;
     }
 
-    /* Slightly smaller symbols on mobile */
     .symbol {
         font-size: 2rem;
     }
@@ -572,18 +559,4 @@ button:focus {
     .symbol {
         font-size: 1.8rem;
     }
-}
-
-#replay-controls {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    margin-top: 10px;
-    flex-wrap: wrap;
-}
-
-#replay-controls button {
-    padding: 6px 12px;
-    font-size: 0.9em;
-    border-radius: 4px;
 }
