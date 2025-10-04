@@ -8,6 +8,10 @@ let blueScore = 0.0;
 let currentPlayer = "red";
 let selectedPiece = null;
 
+let gameOver = false;
+let moveHistory = []; // For repetition detection
+let surrenderRequested = null; // "red", "blue", or null
+
 let sessionMinutes = 20;
 let sessionSeconds = 0;
 let roundMinutes = 1;
@@ -81,9 +85,9 @@ const PIECES = {
   b6: { color: "blue", value: 10 },
   b7: { color: "blue", value: -3 },
   b8: { color: "blue", value: 0 },
-  b9: { color: "blue", value: -4 },
+  b9: { color: "blue", value: 4 },
   b10: { color: "blue", value: -1 },
-  b11: { color: "blue", value: -6 },
+  b11: { color: "blue", value: 6 },
   b12: { color: "blue", value: -9 },
 };
 
@@ -468,6 +472,9 @@ function logMove(moveData) {
 
 // ================== PERFORM MOVE ==================
 function performMove(piece, startRow, startCol, endRow, endCol) {
+  // Prevent moves if game is already over
+  if (gameOver) return;
+
   const startSq = document.querySelector(
     `.square[data-row='${startRow}'][data-col='${startCol}']`
   );
@@ -483,7 +490,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     "piece";
   const pieceValue = parseInt(piece.dataset.value, 10);
 
-  // Capture detection
+  // === CAPTURE DETECTION ===
   if (isKing) {
     capturedPieces = findCapturedPieces(
       startRow,
@@ -510,7 +517,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   let operator = "";
   let capturedValue = 0;
 
-  // Sci-Damath scoring
+  // === SCI-DAMATH SCORING ===
   if (capturedPieces.length > 0) {
     operator = getMathSymbol(endRow, endCol);
     capturedValue = parseInt(capturedPieces[0].dataset.value, 10);
@@ -523,7 +530,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     redScoreEl.textContent = redScore.toFixed(2);
     blueScoreEl.textContent = blueScore.toFixed(2);
 
-    // Log capture
+    // Log capture move
     logMove({
       type: "capture",
       player: color,
@@ -547,21 +554,33 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     });
   }
 
-  // Move piece
+  // === RECORD MOVE FOR REPETITION DETECTION (single chip scenario) ===
+  if (document.querySelectorAll(".piece").length <= 2) {
+    const moveKey = `${startRow},${startCol}->${endRow},${endCol}`;
+    moveHistory.push(moveKey);
+    // Keep only last 6 moves for 3-repetition check
+    if (moveHistory.length > 6) moveHistory.shift();
+  }
+
+  // === MOVE THE PIECE ===
   endSq.appendChild(piece);
 
-  // Chain capture
+  // === CHAIN CAPTURE LOGIC ===
   if (
     capturedPieces.length > 0 &&
     checkForChainCapture(piece, endRow, endCol)
   ) {
     mustCaptureWithPiece = piece;
+    // Check game over immediately for chain capture scenarios
+    setTimeout(() => checkGameOver(), 100);
   } else {
     mustCaptureWithPiece = null;
     switchTurn();
+    // Check game over after turn switch
+    setTimeout(() => checkGameOver(), 100);
   }
 
-  // King promotion
+  // === KING PROMOTION ===
   let wasPromoted = false;
   if (!isKing) {
     if (color === "red" && endRow === 0) {
@@ -582,11 +601,11 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     });
   }
 
-  // Visual feedback
+  // === VISUAL FEEDBACK ===
   highlightSquareSymbol(endRow, endCol);
   clearValidMoves();
 
-  // Start timers
+  // === START TIMERS ON FIRST MOVE ===
   if (!timersStarted) {
     timersStarted = true;
     startSessionTimer();
@@ -721,28 +740,11 @@ function startSessionTimer() {
       if (sessionMinutes === 0) {
         clearInterval(sessionInterval);
         clearInterval(roundInterval);
-
-        // 🔥 Calculate final scores
-        const finalScores = calculateFinalScores();
-
-        // Show winner
-        let winner = "It's a tie!";
-        if (finalScores.red > finalScores.blue) {
-          winner = "Red wins!";
-        } else if (finalScores.blue > finalScores.red) {
-          winner = "Blue wins!";
-        }
-
-        alert(
-          `Session over!\n\nFinal Scores:\nRed: ${finalScores.red.toFixed(
-            2
-          )}\nBlue: ${finalScores.blue.toFixed(2)}\n\n${winner}`
-        );
+        endGame("Time's up! (20-minute session limit)");
         return;
-      } else {
-        sessionMinutes--;
-        sessionSeconds = 59;
       }
+      sessionMinutes--;
+      sessionSeconds = 59;
     } else {
       sessionSeconds--;
     }
@@ -848,20 +850,184 @@ function setupDebugControls() {
   reset?.addEventListener("click", resetGame);
 
   const endGameBtn = document.getElementById("end-game");
-if (endGameBtn) {
-  endGameBtn.addEventListener("click", () => {
-    if (sessionInterval) clearInterval(sessionInterval);
-    if (roundInterval) clearInterval(roundInterval);
-    
-    const finalScores = calculateFinalScores();
-    
-    let winner = "It's a tie!";
-    if (finalScores.red > finalScores.blue) winner = "Red wins!";
-    else if (finalScores.blue > finalScores.red) winner = "Blue wins!";
-    
-    alert(`Game ended!\n\nFinal Scores:\nRed: ${finalScores.red.toFixed(2)}\nBlue: ${finalScores.blue.toFixed(2)}\n\n${winner}`);
-  });
+  if (endGameBtn) {
+    endGameBtn.addEventListener("click", () => {
+      if (sessionInterval) clearInterval(sessionInterval);
+      if (roundInterval) clearInterval(roundInterval);
+
+      const finalScores = calculateFinalScores();
+
+      let winner = "It's a tie!";
+      if (finalScores.red > finalScores.blue) winner = "Red wins!";
+      else if (finalScores.blue > finalScores.red) winner = "Blue wins!";
+
+      alert(
+        `Game ended!\n\nFinal Scores:\nRed: ${finalScores.red.toFixed(
+          2
+        )}\nBlue: ${finalScores.blue.toFixed(2)}\n\n${winner}`
+      );
+    });
+  }
+
+  // Surrender button
+  const surrenderBtn = document.getElementById("surrender");
+  if (surrenderBtn) {
+    surrenderBtn.addEventListener("click", () => {
+      if (!gameOver && confirm(`Are you sure you want to surrender as ${currentPlayer}?`)) {
+        surrenderRequested = currentPlayer;
+        checkGameOver();
+      }
+    });
+  }
+
+  // Mutual agreement button
+  const agreeBtn = document.getElementById("agree-finish");
+  if (agreeBtn) {
+    agreeBtn.addEventListener("click", () => {
+      if (!gameOver && confirm("Do both players agree to end the game?")) {
+        endGame("Game ended by mutual agreement.");
+      }
+    });
+  }
 }
+
+// ================== GAME OVER FLAG CONDITIONS ==================
+function checkGameOver() {
+  if (gameOver) return true;
+
+  const redPieces = document.querySelectorAll(".piece.red").length;
+  const bluePieces = document.querySelectorAll(".piece.blue").length;
+  const currentPlayerPieces = currentPlayer === "red" ? redPieces : bluePieces;
+
+  // Condition 1: Current player has no chips
+  if (currentPlayerPieces === 0) {
+    const winner = currentPlayer === "red" ? "Blue" : "Red";
+    endGame(`${winner} wins! (Opponent has no chips)`);
+    return true;
+  }
+
+  // Condition 2: Current player has no possible moves
+  if (!playerHasAnyValidMove(currentPlayer)) {
+    const winner = currentPlayer === "red" ? "Blue" : "Red";
+    endGame(`${winner} wins! (Opponent has no valid moves)`);
+    return true;
+  }
+
+  // Condition 3: Single chip + move repetition (3 repetitions for practicality)
+  if (currentPlayerPieces === 1 && moveHistory.length >= 6) {
+    const lastThree = moveHistory.slice(-3);
+    const prevThree = moveHistory.slice(-6, -3);
+    if (JSON.stringify(lastThree) === JSON.stringify(prevThree)) {
+      endGame("Draw! (3-move repetition with single chip)");
+      return true;
+    }
+  }
+
+  // Condition 5: Surrender
+  if (surrenderRequested) {
+    const winner = surrenderRequested === "red" ? "Blue" : "Red";
+    endGame(`${winner} wins! (${surrenderRequested} surrendered)`);
+    return true;
+  }
+
+  // Condition 6: Mutual agreement (handled by direct endGame() call)
+  // Condition 4: 20-minute timeout (handled by session timer)
+
+  return false;
+}
+
+// Helper: Check if player has ANY valid move
+function playerHasAnyValidMove(color) {
+  const pieces = document.querySelectorAll(`.piece.${color}`);
+  for (const piece of pieces) {
+    const sq = piece.parentElement;
+    const row = parseInt(sq.dataset.row, 10);
+    const col = parseInt(sq.dataset.col, 10);
+
+    // Check all playable squares for valid moves
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const targetSq = document.querySelector(
+          `.square[data-row='${r}'][data-col='${c}']`
+        );
+        if (targetSq && targetSq.classList.contains("playable")) {
+          if (isValidMove(piece, row, col, r, c)) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function endGame(reason) {
+  if (gameOver) return;
+  gameOver = true;
+
+  // Stop all timers
+  if (sessionInterval) clearInterval(sessionInterval);
+  if (roundInterval) clearInterval(roundInterval);
+
+  // Calculate final scores: add remaining pieces' values
+  const redPieces = document.querySelectorAll(".piece.red");
+  const bluePieces = document.querySelectorAll(".piece.blue");
+
+  let redRemaining = 0;
+  redPieces.forEach((piece) => {
+    const value = parseFloat(piece.dataset.value);
+    if (!isNaN(value)) redRemaining += value;
+  });
+
+  let blueRemaining = 0;
+  bluePieces.forEach((piece) => {
+    const value = parseFloat(piece.dataset.value);
+    if (!isNaN(value)) blueRemaining += value;
+  });
+
+  // Add remaining values to current scores
+  redScore += redRemaining;
+  blueScore += blueRemaining;
+
+  // Format scores to 2 decimal places (DepEd compliant)
+  const finalRed = redScore.toFixed(2);
+  const finalBlue = blueScore.toFixed(2);
+
+  // Determine winner based on final scores
+  let winnerMessage = "";
+  const redNum = parseFloat(finalRed);
+  const blueNum = parseFloat(finalBlue);
+
+  if (redNum > blueNum) {
+    winnerMessage = "Red wins!";
+  } else if (blueNum > redNum) {
+    winnerMessage = "Blue wins!";
+  } else {
+    winnerMessage = "It's a draw!";
+  }
+
+  // Create detailed final message
+  const finalMessage =
+    `GAME OVER\n\n` +
+    `${reason}\n\n` +
+    `Final Scores:\n` +
+    `Red: ${finalRed}\n` +
+    `Blue: ${finalBlue}\n\n` +
+    `${winnerMessage}\n\n` +
+    `Remaining pieces added:\n` +
+    `Red: ${redRemaining.toFixed(2)}\n` +
+    `Blue: ${blueRemaining.toFixed(2)}`;
+
+  // Show alert and log to console
+  alert(finalMessage);
+  console.log("Game Over:", reason);
+  console.log("Final Scores - Red:", finalRed, "Blue:", finalBlue);
+  console.log(
+    "Remaining values - Red:",
+    redRemaining.toFixed(2),
+    "Blue:",
+    blueRemaining.toFixed(2)
+  );
 }
 
 // INIT
