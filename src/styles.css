@@ -466,3 +466,35 @@ button:focus {
     z-index: 2;
     font-size: 1.2rem;
 }
+
+.piece {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    width: 80%;
+    height: 80%;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1.2em;
+    color: #fff;
+}
+
+.piece-number {
+    z-index: 2;
+    /* ensure number stays on top */
+}
+
+.king-symbol {
+    position: absolute;
+    top: 4px;
+    /* slightly above center */
+    font-size: 0.8em;
+    /* smaller than number */
+    z-index: 3;
+    /* above number */
+    pointer-events: none;
+    color: gold;
+    text-shadow: 0 0 2px #000;
+}

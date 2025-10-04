@@ -134,7 +134,10 @@ function placeInitialPieces() {
     piece.setAttribute("tabindex", "0");
     piece.draggable = true;
 
-    // Add a number label in the center
+    // Save value on element
+    piece.dataset.value = pieceData.value;
+
+    // Add number label in center
     const numberLabel = document.createElement("span");
     numberLabel.classList.add("piece-number");
     numberLabel.textContent = pieceData.value;
@@ -143,8 +146,6 @@ function placeInitialPieces() {
     square.appendChild(piece);
   }
 }
-
-placeInitialPieces();
 
 // ================== HIGHLIGHT MATH SYMBOL ==================
 function highlightSquareSymbol(row, col) {
@@ -458,4 +459,5 @@ function updateTimerDisplay() {
 
 
 // ================== INIT ==================
+placeInitialPieces();
 createBoard();
