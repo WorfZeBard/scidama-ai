@@ -3,7 +3,6 @@ const redScoreEl = document.getElementById("red-score");
 const blueScoreEl = document.getElementById("blue-score");
 const currentPlayerEl = document.getElementById("current-player");
 const errorMessageEl = document.getElementById("error-message");
-let gameMode = pvp; // "pvp" or "pvc"
 let redScore = 0.0;
 let blueScore = 0.0;
 let currentPlayer = "red";
@@ -19,7 +18,6 @@ let roundSeconds = 0;
 let sessionInterval;
 let roundInterval;
 let timersStarted = false;
-let debugMode = false;
 let mustCaptureWithPiece = null;
 let moveHistoryStates = []; // Full board states for undo/redo
 let currentMoveIndex = -1; // Current position in move history
@@ -27,6 +25,33 @@ let replayMode = false;
 let replayInterval = null;
 let gameOver = false;
 let piecesTransparent = false;
+
+// src/assets/js/app.js
+
+// Detect game mode from URL
+const path = window.location.pathname;
+let gameMode = null; // 'pvp', 'pvai', or 'debug'
+
+if (path.includes('/pvp/')) {
+  gameMode = 'pvp';
+} else if (path.includes('/pvai/')) {
+  gameMode = 'pvai';
+} else if (path.includes('/debug_mode/')) {
+  gameMode = 'debug';
+  window.debugMode = true; // Enable debug setup
+}
+
+// Rest of your game logic stays the same
+// Only branch when needed:
+if (gameMode === 'pvai' && currentPlayer === 'blue') {
+  makeAIMove(); // AI logic only in pvai
+}
+
+// Support external debug mode flag
+if (typeof window.debugMode === 'undefined') {
+  window.debugMode = false;
+}
+let debugMode = window.debugMode;
 
 // ================== INITIAL SETUP (LIGHT SQUARES) ==================
 let INITIAL_SETUP = {
@@ -228,10 +253,54 @@ function switchTurn() {
   roundEl.className = "timer";
   roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
   startRoundTimer();
-  if (gameMode === "pvc" && currentPlayer === "blue") {
+
+  // AI move logic
+  if (gameMode === "pvai" && currentPlayer === "blue") {
     setTimeout(() => {
-      alert("AI move logic not implemented yet.");
-    }, 500);
+      makeAIMove();
+    }, 1000);
+  }
+}
+
+// Simple AI move function (placeholder)
+function makeAIMove() {
+  if (gameOver || currentPlayer !== "blue") return;
+  
+  // Get all blue pieces
+  const bluePieces = Array.from(document.querySelectorAll(".piece.blue"));
+  
+  // Find valid moves for each piece
+  let validMoves = [];
+  for (const piece of bluePieces) {
+    const sq = piece.parentElement;
+    const startRow = parseInt(sq.dataset.row);
+    const startCol = parseInt(sq.dataset.col);
+    
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        if (isValidMove(piece, startRow, startCol, r, c)) {
+          validMoves.push({
+            piece: piece,
+            startRow: startRow,
+            startCol: startCol,
+            endRow: r,
+            endCol: c
+          });
+        }
+      }
+    }
+  }
+  
+  if (validMoves.length > 0) {
+    // Choose a random valid move (simple AI)
+    const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+    performMove(
+      randomMove.piece,
+      randomMove.startRow,
+      randomMove.startCol,
+      randomMove.endRow,
+      randomMove.endCol
+    );
   }
 }
 
@@ -1120,7 +1189,16 @@ function setupDebugControls() {
     backToMenuBtn.addEventListener("click", (e) => {
       e.preventDefault();
       if (confirm("Return to main menu? Current game will be lost.")) {
-        window.location.href = "../../index.html"; // ✅ FIXED PATH
+        // Get current file's directory
+        const currentDir = window.location.href.substring(
+          0,
+          window.location.href.lastIndexOf("/")
+        );
+
+        // Go up to project root and then into src/
+        const menuPath = currentDir.split("src")[0] + "src/index.html";
+
+        window.location.href = menuPath;
       }
     });
   }

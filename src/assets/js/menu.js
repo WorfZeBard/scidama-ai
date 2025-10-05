@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Main menu buttons
   document.getElementById('btn-pvp')?.addEventListener('click', () => openModal('pvp-modal'));
-  document.getElementById('btn-pvc')?.addEventListener('click', () => openModal('pvc-modal'));
+  document.getElementById('btn-pvai')?.addEventListener('click', () => openModal('pvai-modal'));
   document.getElementById('btn-options')?.addEventListener('click', () => openModal('options-modal'));
   document.getElementById('btn-debug')?.addEventListener('click', () => {
     window.location.href = '../debug_mode/debug_mode.html';
@@ -81,8 +81,8 @@ document.addEventListener("DOMContentLoaded", () => {
     .getElementById("btn-pvp")
     ?.addEventListener("click", () => openModal("pvp-modal"));
   document
-    .getElementById("btn-pvc")
-    ?.addEventListener("click", () => openModal("pvc-modal"));
+    .getElementById("btn-pvai")
+    ?.addEventListener("click", () => openModal("pvai-modal"));
   document
     .getElementById("btn-options")
     ?.addEventListener("click", () => openModal("options-modal"));
@@ -105,9 +105,9 @@ document.addEventListener("DOMContentLoaded", () => {
     ) {
       const variant = e.target.dataset.variant;
       if (variant === "integer") {
-        window.location.href = "pvp/sci-damath/integer-scidamath.html";
+        window.location.href = "pvp/sci-damath/pvp-integer-scidamath.html";
       } else if (variant === "integer-ai") {
-        window.location.href = "pvc/sci-damath/integer-scidamath.html";
+        window.location.href = "pvai/sci-damath/pvai-integer-scidamath.html";
       }
     }
   });
