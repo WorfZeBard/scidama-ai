@@ -1,75 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sci-Damath Offline</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <header>
-      <h1 id="game-title">Sci-Damath Offline</h1>
-      <!-- Debug Controls -->
-      <div id="debug-controls">
-        <button id="debug-toggle">Debug Mode: OFF</button>
-        <button id="reset-board">Reset Board</button>
-      </div>
-    </header>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sci-Damath</title>
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+</head>
+<body class="menu-screen">
+  <!-- Background board (no pieces) -->
+  <div id="menu-board-background" aria-hidden="true"></div>
 
-    <!-- Main Layout -->
-    <main class="game-container">
-      <!-- Left Sidebar (Scores + Timers) -->
-      <aside class="sidebar left-sidebar" aria-label="Game stats">
-        <!-- Scores -->
-        <section class="scoreboard" aria-label="Scoreboard">
-          <div class="score red">
-            <h3>Red Score</h3>
-            <span id="red-score">0</span>
-          </div>
-          <div class="score blue">
-            <h3>Blue Score</h3>
-            <span id="blue-score">0</span>
-          </div>
-        </section>
+  <!-- Skip link -->
+  <a href="#main-menu" class="skip-link">Skip to main menu</a>
 
-        <!-- Timers -->
-        <section class="timers" aria-label="Timers">
-          <div class="timer-wrapper">
-            <span class="timer-label">Session:</span>
-            <span id="session-time">20:00</span>
-          </div>
-          <div class="timer-wrapper">
-            <span class="timer-label">Round:</span>
-            <span id="round-time">1:00</span>
-          </div>
-          <div class="current-player-label">
-            Current Player: <span id="player">red</span>
-          </div>
-        </section>
-      </aside>
-
-      <!-- Gameboard -->
-      <section id="gameboard" role="main" aria-label="Gameboard"></section>
-
-      <!-- Right Sidebar (Move History) -->
-      <aside class="sidebar right-sidebar" aria-label="Move history">
-        <section id="move-history">
-          <h3>Move History</h3>
-          <ul id="move-history-content" aria-live="polite"></ul>
-        </section>
-      </aside>
-    </main>
-
-    <!-- Sound Effects -->
-    <div id="sounds">
-      <audio
-        id="move-promotion001"
-        src="assets/move-promotion001.mp3"
-        preload="auto"
-      ></audio>
+  <!-- Main menu content -->
+  <div id="main-menu" class="menu-content">
+    <h1 id="menu-title">Sci-Damath</h1>
+    <div class="menu-buttons">
+      <button id="btn-pvp" class="menu-btn">Player vs Player</button>
+      <button id="btn-pvc" class="menu-btn">Player vs AI</button>
+      <button id="btn-options" class="menu-btn">Options</button>
+      <button id="btn-debug" class="menu-btn">Debug Mode</button>
     </div>
+  </div>
 
-    <!-- Scripts -->
-    <script src="app.js"></script>
-  </body>
+  <!-- Player vs Player Modal -->
+  <div id="pvp-modal" class="modal" hidden>
+    <div class="modal-content">
+      <h2>Player vs Player</h2>
+      <div class="variant-buttons">
+        <button class="variant-btn disabled" disabled>Counting Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Whole Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Fraction Sci-Damaths</button>
+        <button class="variant-btn" data-variant="integer">Integer Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Rational Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Radical Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Polynomial Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Custom Mode</button>
+      </div>
+      <button class="modal-close">&larr; Back</button>
+    </div>
+  </div>
+
+  <!-- Player vs AI Modal -->
+  <div id="pvc-modal" class="modal" hidden>
+    <div class="modal-content">
+      <h2>Player vs AI</h2>
+      <div class="variant-buttons">
+        <button class="variant-btn disabled" disabled>Counting Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Whole Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Fraction Sci-Damaths</button>
+        <button class="variant-btn" data-variant="integer-ai">Integer Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Rational Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Radical Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Polynomial Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Custom Mode</button>
+      </div>
+      <button class="modal-close">&larr; Back</button>
+    </div>
+  </div>
+
+  <!-- Options Modal -->
+  <div id="options-modal" class="modal" hidden>
+    <div class="modal-content">
+      <h2>Options</h2>
+      <div class="options-content">
+        <div class="option-group">
+          <label for="sound-volume">Sound Volume:</label>
+          <input type="range" id="sound-volume" min="0" max="100" value="80">
+        </div>
+        <div class="option-group">
+          <label for="theme-select">Theme:</label>
+          <select id="theme-select">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="system">System</option>
+          </select>
+        </div>
+        <div class="option-group">
+          <label>
+            <input type="checkbox" id="enable-sounds" checked>
+            Enable Sound Effects
+          </label>
+        </div>
+        <div class="option-group">
+          <label>
+            <input type="checkbox" id="enable-notifications" checked>
+            Enable Notifications
+          </label>
+        </div>
+      </div>
+      <button class="modal-close">&larr; Back</button>
+    </div>
+  </div>
+
+  <script src="assets/js/menu.js"></script>
+</body>
 </html>

@@ -3,7 +3,7 @@ const redScoreEl = document.getElementById("red-score");
 const blueScoreEl = document.getElementById("blue-score");
 const currentPlayerEl = document.getElementById("current-player");
 const errorMessageEl = document.getElementById("error-message");
-let gameMode = pvp; // "pvp" or "pvc"
+let gameMode = pvc; // "pvp" or "pvc"
 let redScore = 0.0;
 let blueScore = 0.0;
 let currentPlayer = "red";
@@ -215,9 +215,11 @@ function highlightMoveSquares(startRow, startCol, endRow, endCol) {
   setTimeout(clearMoveHighlights, 2000);
 }
 
+// In the switchTurn function, add AI logic:
 function switchTurn() {
   currentPlayer = currentPlayer === "red" ? "blue" : "red";
-  currentPlayerEl.textContent = currentPlayer;
+  currentPlayerEl.textContent = currentPlayer === "red" ? "Player" : "AI";
+  // Update current player label for styling
   const currentPlayerLabel = document.querySelector(".current-player-label");
   if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
@@ -228,10 +230,54 @@ function switchTurn() {
   roundEl.className = "timer";
   roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
   startRoundTimer();
+  
+  // AI move logic
   if (gameMode === "pvc" && currentPlayer === "blue") {
     setTimeout(() => {
-      alert("AI move logic not implemented yet.");
-    }, 500);
+      makeAIMove();
+    }, 1000);
+  }
+}
+
+// Simple AI move function (placeholder)
+function makeAIMove() {
+  if (gameOver || currentPlayer !== "blue") return;
+  
+  // Get all blue pieces
+  const bluePieces = Array.from(document.querySelectorAll(".piece.blue"));
+  
+  // Find valid moves for each piece
+  let validMoves = [];
+  for (const piece of bluePieces) {
+    const sq = piece.parentElement;
+    const startRow = parseInt(sq.dataset.row);
+    const startCol = parseInt(sq.dataset.col);
+    
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        if (isValidMove(piece, startRow, startCol, r, c)) {
+          validMoves.push({
+            piece: piece,
+            startRow: startRow,
+            startCol: startCol,
+            endRow: r,
+            endCol: c
+          });
+        }
+      }
+    }
+  }
+  
+  if (validMoves.length > 0) {
+    // Choose a random valid move (simple AI)
+    const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+    performMove(
+      randomMove.piece,
+      randomMove.startRow,
+      randomMove.startCol,
+      randomMove.endRow,
+      randomMove.endCol
+    );
   }
 }
 
