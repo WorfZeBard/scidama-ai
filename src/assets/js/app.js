@@ -1161,19 +1161,30 @@ function setupDebugControls() {
 // ================== GAME OVER FLAG CONDITIONS ==================
 function checkGameOver() {
   if (gameOver) return true;
+
+  // ✅ HANDLE SURRENDER FIRST (no score calculation)
+  if (surrenderRequested) {
+    const winner = surrenderRequested === "red" ? "Blue" : "Red";
+    endGame(`${winner} wins! (${surrenderRequested} surrendered)`, true); // 👈 true = isSurrender
+    return true;
+  }
+
   const redPieces = document.querySelectorAll(".piece.red").length;
   const bluePieces = document.querySelectorAll(".piece.blue").length;
   const currentPlayerPieces = currentPlayer === "red" ? redPieces : bluePieces;
+
   if (currentPlayerPieces === 0) {
     const winner = currentPlayer === "red" ? "Blue" : "Red";
     endGame(`${winner} wins! (Opponent has no chips)`);
     return true;
   }
+
   if (!playerHasAnyValidMove(currentPlayer)) {
     const winner = currentPlayer === "red" ? "Blue" : "Red";
     endGame(`${winner} wins! (Opponent has no valid moves)`);
     return true;
   }
+
   if (currentPlayerPieces === 1 && moveHistory.length >= 6) {
     const lastThree = moveHistory.slice(-3);
     const prevThree = moveHistory.slice(-6, -3);
@@ -1182,11 +1193,7 @@ function checkGameOver() {
       return true;
     }
   }
-  if (surrenderRequested) {
-    const winner = surrenderRequested === "red" ? "Blue" : "Red";
-    endGame(`${winner} wins! (${surrenderRequested} surrendered)`);
-    return true;
-  }
+
   return false;
 }
 
@@ -1212,15 +1219,26 @@ function playerHasAnyValidMove(color) {
   return false;
 }
 
-function endGame(reason) {
+function endGame(reason, isSurrender = false) {
   if (gameOver) return;
   gameOver = true;
+
   if (sessionInterval) clearInterval(sessionInterval);
   if (roundInterval) clearInterval(roundInterval);
   playSound("gameEnd");
+
+  if (isSurrender) {
+    // ✅ For surrender: show ONLY the reason (no scores)
+    alert(`GAME OVER\n${reason}`);
+    console.log("Game Over:", reason);
+    return;
+  }
+
+  // ✅ Only calculate scores for non-surrender endings
   const finalScores = calculateFinalScores();
   const finalRed = finalScores.red.toFixed(2);
   const finalBlue = finalScores.blue.toFixed(2);
+
   let winnerMessage = "";
   const redScore = parseFloat(finalRed);
   const blueScore = parseFloat(finalBlue);
@@ -1231,6 +1249,7 @@ function endGame(reason) {
   } else {
     winnerMessage = "It's a draw!";
   }
+
   const finalMessage =
     `GAME OVER
 ` +
@@ -1243,6 +1262,7 @@ function endGame(reason) {
     `Blue: ${finalBlue}
 ` +
     `${winnerMessage}`;
+
   alert(finalMessage);
   console.log("Game Over:", reason);
   console.log("Final Scores - Red:", finalRed, "Blue:", finalBlue);
