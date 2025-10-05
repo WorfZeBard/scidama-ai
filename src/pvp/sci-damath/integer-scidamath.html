@@ -9,111 +9,112 @@
     />
     <title>Sci-Damath Offline</title>
     <link rel="stylesheet" href="../../assets/css/styles.css" />
-    <link rel="icon" type="assets/favicon.ico" href="assets/favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="../../assets/favicon.ico" />
   </head>
   <body>
     <!-- Skip link -->
-    <a href="#main-menu" class="skip-link">Skip to main menu</a>
+    <a href="#game-screen" class="skip-link">Skip to game</a>
 
     <!-- Game Screen -->
-    <div id="game-screen" class="game-screen">
-      <!-- Your existing game UI goes here -->
-      <header>
-        <h1 id="game-title">Sci-Damath Offline</h1>
-        <div id="game-status" class="game-status" aria-live="polite"></div>
-        <div
-          id="error-message"
-          class="error-message"
-          aria-live="assertive"
-          hidden
-        ></div>
-
-        <div id="game-controls">
-          <!-- In #game-controls -->
-          <button id="debug-toggle">Debug Mode: OFF</button>
-          <button id="reset-board">Reset Board</button>
-          <button id="end-game">End Game & Calculate Final Scores</button>
-          <button id="replay">Replay</button>
-          <button id="stop-replay">Stop</button>
-          <a href="../../index.html"><button id="back-to-menu">← Back to Menu</button></a>
-        </div>
-      </header>
-
-      <main class="game-container">
-        <!-- Left Sidebar -->
-        <aside class="sidebar left-sidebar" aria-label="Game stats">
-          <section class="scoreboard" aria-label="Scoreboard">
-            <div class="score red">
-              <h3>Red Score</h3>
-              <span id="red-score">0.00</span>
-            </div>
-            <div class="score blue">
-              <h3>Blue Score</h3>
-              <span id="blue-score">0.00</span>
-            </div>
-          </section>
-
-          <section class="timers" aria-label="Timers">
-            <div class="timer-wrapper">
-              <span class="timer-label">Session:</span>
-              <span id="session-time">20:00</span>
-            </div>
-            <div class="timer-wrapper">
-              <span class="timer-label">Round:</span>
-              <span id="round-time">1:00</span>
-            </div>
-            <div class="current-player-label">
-              Current Player: <span id="current-player">red</span>
-            </div>
-          </section>
-        </aside>
-
-        <!-- Gameboard -->
-        <section
-          id="gameboard"
-          tabindex="-1"
-          aria-label="Gameboard"
-          aria-describedby="game-instructions"
-        ></section>
-
-        <!-- Right Sidebar -->
-        <aside
-          class="sidebar right-sidebar"
-          aria-label="Move history and game controls"
-        >
-          <section id="move-history">
-            <h3 class="move-history-header">Move History</h3>
-            <div class="move-history-scrollable">
-              <ul id="move-history-content" aria-live="polite"></ul>
-            </div>
-          </section>
-
-          <div id="action-buttons" class="action-buttons">
-            <!-- In #action-controls -->
-            <button id="surrender">Surrender</button>
-            <button id="agree-finish">Agree to Finish</button>
-            <button id="undo">Undo</button>
-            <button id="redo">Redo</button>
-            <button id="toggle-transparency">Show Symbols</button>
+    <main id="game-screen" class="game-screen" tabindex="-1">
+      <div class="game-container">
+        <!-- Debug controls sidebar (stays pinned left) -->
+        <aside class="controls-sidebar" aria-label="Game controls">
+          <button
+            id="toggle-controls"
+            class="toggle-controls-btn"
+            aria-expanded="true"
+            aria-label="Hide game controls"
+            title="Hide game controls"
+          >
+            ≡
+          </button>
+          <div class="control-group" id="controls-content">
+            <button id="debug-toggle">Debug Mode: OFF</button>
+            <button id="reset-board">Reset Board</button>
+            <button id="end-game">End Game</button>
+            <button id="replay">Replay</button>
+            <button id="stop-replay">Stop</button>
+            <button id="back-to-menu">← Back to Menu</button> <!-- ✅ FIXED -->
           </div>
         </aside>
-      </main>
+
+        <!-- CENTERED GAME CONTENT -->
+        <div class="centered-game-content">
+          <div class="game-layout">
+            <!-- Stats Sidebar (Score & Timers) -->
+            <aside class="sidebar stats-sidebar" aria-label="Game stats">
+              <section class="scoreboard" aria-label="Scoreboard">
+                <div class="score red">
+                  <h2>Red Score</h2>
+                  <span id="red-score">0.00</span>
+                </div>
+                <div class="score blue">
+                  <h2>Blue Score</h2>
+                  <span id="blue-score">0.00</span>
+                </div>
+              </section>
+
+              <section class="timers" aria-label="Timers">
+                <div class="timer-wrapper">
+                  <span class="timer-label">Session:</span>
+                  <span id="session-time">20:00</span>
+                </div>
+                <div class="timer-wrapper">
+                  <span class="timer-label">Round:</span>
+                  <span id="round-time">1:00</span>
+                </div>
+                <div class="current-player-label" data-player="red">
+                  Current Player: <span id="current-player">red</span>
+                </div>
+              </section>
+            </aside>
+
+            <!-- Gameboard -->
+            <section
+              id="gameboard"
+              tabindex="0"
+              aria-label="Gameboard"
+              aria-describedby="game-instructions"
+            ></section>
+
+            <!-- Move History & Actions -->
+            <aside
+              class="sidebar actions-sidebar"
+              aria-label="Move history and actions"
+            >
+              <section id="move-history">
+                <h2 class="move-history-header">Move History</h2>
+                <div class="move-history-scrollable">
+                  <ul id="move-history-content" aria-live="polite"></ul>
+                </div>
+              </section>
+
+              <div class="action-buttons">
+                <button id="surrender">Surrender</button>
+                <button id="agree-finish">Agree to Finish</button>
+                <button id="undo">Undo</button>
+                <button id="redo">Redo</button>
+                <button id="toggle-transparency">Show Symbols</button>
+                <button id="toggle-dark-mode">Dark Mode</button> <!-- ✅ ADDED -->
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
 
       <div id="game-instructions" hidden>
-        Sci-Damath is a mathematical board game. Players take turns moving
-        pieces and performing mathematical operations.
+        Sci-Damath is a mathematical board game. Players take turns moving pieces and performing mathematical operations based on the symbols on the board.
       </div>
-    </div>
+    </main>
 
     <!-- Sounds -->
-    <div id="sounds">
-      <audio id="move-sound" src="assets/move.mp3" preload="auto"></audio>
-      <audio id="capture-sound" src="assets/capture.mp3" preload="auto"></audio>
-      <audio
-        id="move-promotion001"
-        src="assets/move-promotion001.mp3"
-        preload="auto"
-      ></audio>
+    <div id="sounds" aria-hidden="true">
+      <audio id="move-sound" src="../../assets/sounds/move.mp3" preload="auto"></audio>
+      <audio id="capture-sound" src="../../assets/sounds/capture.mp3" preload="auto"></audio>
+      <audio id="move-promotion001" src="../../assets/sounds/move-promotion001.mp3" preload="auto"></audio>
+      <audio id="game-start" src="../../assets/sounds/game-start.mp3" preload="auto"></audio>
+      <audio id="game-end" src="../../assets/sounds/game-end.mp3" preload="auto"></audio>
     </div>
 
     <script src="../../assets/js/app.js"></script>
