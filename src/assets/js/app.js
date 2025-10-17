@@ -2,36 +2,56 @@ const gameboard = document.getElementById("gameboard");
 const redScoreEl = document.getElementById("red-score");
 const blueScoreEl = document.getElementById("blue-score");
 const currentPlayerEl = document.getElementById("current-player");
-
+const errorMessageEl = document.getElementById("error-message");
 let redScore = 0.0;
 let blueScore = 0.0;
 let currentPlayer = "red";
 let selectedPiece = null;
-
 let moveHistoryEntries = []; // Track move history entries for undo/redo
 let currentHistoryIndex = -1; // Current position in move history
 let moveHistory = []; // For repetition detection
 let surrenderRequested = null; // "red", "blue", or null
-
 let sessionMinutes = 20;
 let sessionSeconds = 0;
 let roundMinutes = 1;
 let roundSeconds = 0;
-
 let sessionInterval;
 let roundInterval;
 let timersStarted = false;
-let debugMode = false;
 let mustCaptureWithPiece = null;
-
 let moveHistoryStates = []; // Full board states for undo/redo
-let currentMoveIndex = -1;  // Current position in move history
-
+let currentMoveIndex = -1; // Current position in move history
 let replayMode = false;
 let replayInterval = null;
 let gameOver = false;
-
 let piecesTransparent = false;
+
+// src/assets/js/app.js
+
+// Detect game mode from URL
+const path = window.location.pathname;
+let gameMode = null; // 'pvp', 'pvai', or 'debug'
+
+if (path.includes('/pvp/')) {
+  gameMode = 'pvp';
+} else if (path.includes('/pvai/')) {
+  gameMode = 'pvai';
+} else if (path.includes('/debug_mode/')) {
+  gameMode = 'debug';
+  window.debugMode = true; // Enable debug setup
+}
+
+// Rest of your game logic stays the same
+// Only branch when needed:
+if (gameMode === 'pvai' && currentPlayer === 'blue') {
+  makeAIMove(); // AI logic only in pvai
+}
+
+// Support external debug mode flag
+if (typeof window.debugMode === 'undefined') {
+  window.debugMode = false;
+}
+let debugMode = window.debugMode;
 
 // ================== INITIAL SETUP (LIGHT SQUARES) ==================
 let INITIAL_SETUP = {
@@ -113,22 +133,92 @@ const DAMATH_LAYOUT = [
   ["", "+", "", "-", "", "÷", "", "x"],
 ];
 
+// ================== SOUND EFFECTS ==================
+const sounds = {
+  move: document.getElementById("move-sound"),
+  capture: document.getElementById("capture-sound"),
+  promotion: document.getElementById("move-promotion001"),
+  gameStart: document.getElementById("game-start"),
+  gameEnd: document.getElementById("game-end"),
+};
+
+function playSound(soundName) {
+  const sound = sounds[soundName];
+  if (sound) {
+    sound.currentTime = 0;
+    sound.play().catch((e) => console.log("Audio play failed:", e));
+  }
+}
+
+// ================== GAME STATUS MESSAGES ==================
+function showErrorMessage(message) {
+  if (!errorMessageEl) return;
+  errorMessageEl.textContent = message;
+  errorMessageEl.hidden = false;
+  setTimeout(() => {
+    errorMessageEl.hidden = true;
+  }, 5000);
+}
+
+// ================== BOARD RENDERING (PURE FUNCTION) ==================
+function createBoardDOM(showPieces = false, setup = null) {
+  const fragment = document.createDocumentFragment();
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const square = document.createElement("div");
+      const isLight = (row + col) % 2 === 0;
+      square.classList.add("square", isLight ? "light" : "dark");
+      if (isLight) square.classList.add("playable");
+      square.dataset.row = row;
+      square.dataset.col = col;
+      const symbol = document.createElement("span");
+      symbol.classList.add("symbol");
+      symbol.textContent = DAMATH_LAYOUT[row][col];
+      symbol.setAttribute("aria-hidden", "true");
+      square.appendChild(symbol);
+      if (showPieces && setup && setup[`${row},${col}`]) {
+        const pieceKey = setup[`${row},${col}`];
+        const pieceData = PIECES[pieceKey];
+        if (pieceData) {
+          const piece = document.createElement("div");
+          piece.classList.add("piece", pieceData.color);
+          piece.dataset.value = pieceData.value;
+          const label = document.createElement("span");
+          label.classList.add("piece-number");
+          label.textContent = pieceData.value;
+          piece.appendChild(label);
+        }
+      }
+      fragment.appendChild(square);
+    }
+  }
+  return fragment;
+}
+
 // ================== BOARD GENERATION ==================
-for (let row = 0; row < 8; row++) {
-  for (let col = 0; col < 8; col++) {
-    const square = document.createElement("div");
-    const isLight = (row + col) % 2 === 0;
-    square.classList.add("square", isLight ? "light" : "dark");
-    square.dataset.row = row;
-    square.dataset.col = col;
-
-    if (isLight) square.classList.add("playable");
-
-    const symbol = document.createElement("span");
-    symbol.classList.add("symbol");
-    symbol.textContent = DAMATH_LAYOUT[row][col];
-    square.appendChild(symbol);
-    gameboard.appendChild(square);
+function initializeBoard() {
+  try {
+    gameboard.innerHTML = "";
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const square = document.createElement("div");
+        const isLight = (row + col) % 2 === 0;
+        square.classList.add("square", isLight ? "light" : "dark");
+        square.dataset.row = row;
+        square.dataset.col = col;
+        if (isLight) square.classList.add("playable");
+        const symbol = document.createElement("span");
+        symbol.classList.add("symbol");
+        symbol.textContent = DAMATH_LAYOUT[row][col];
+        symbol.setAttribute("aria-hidden", "true");
+        square.appendChild(symbol);
+        gameboard.appendChild(square);
+      }
+    }
+    placeInitialPieces();
+  } catch (error) {
+    showErrorMessage("Failed to initialize board: " + error.message);
+    console.error("Board initialization error:", error);
   }
 }
 
@@ -137,176 +227,223 @@ function getMathSymbol(row, col) {
   return DAMATH_LAYOUT[row][col];
 }
 
-function highlightSquareSymbol(row, col) {
-  document
-    .querySelectorAll(".symbol")
-    .forEach((sym) => sym.classList.remove("highlight"));
-  const square = document.querySelector(
-    `.square[data-row='${row}'][data-col='${col}']`
+function highlightMoveSquares(startRow, startCol, endRow, endCol) {
+  clearMoveHighlights();
+  const fromSquare = document.querySelector(
+    `.square[data-row='${startRow}'][data-col='${startCol}']`
   );
-  square?.querySelector(".symbol")?.classList.add("highlight");
+  const toSquare = document.querySelector(
+    `.square[data-row='${endRow}'][data-col='${endCol}']`
+  );
+  if (fromSquare) fromSquare.classList.add("move-from");
+  if (toSquare) toSquare.classList.add("move-to");
+  setTimeout(clearMoveHighlights, 2000);
 }
 
 function switchTurn() {
   currentPlayer = currentPlayer === "red" ? "blue" : "red";
   currentPlayerEl.textContent = currentPlayer;
-
+  const currentPlayerLabel = document.querySelector(".current-player-label");
+  if (currentPlayerLabel) {
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
   if (roundInterval) clearInterval(roundInterval);
   roundMinutes = 1;
   roundSeconds = 0;
-
   roundEl.className = "timer";
   roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
   startRoundTimer();
+
+  // AI move logic
+  if (gameMode === "pvai" && currentPlayer === "blue") {
+    setTimeout(() => {
+      makeAIMove();
+    }, 1000);
+  }
+}
+
+// Simple AI move function (placeholder)
+function makeAIMove() {
+  if (gameOver || currentPlayer !== "blue") return;
+  
+  // Get all blue pieces
+  const bluePieces = Array.from(document.querySelectorAll(".piece.blue"));
+  
+  // Find valid moves for each piece
+  let validMoves = [];
+  for (const piece of bluePieces) {
+    const sq = piece.parentElement;
+    const startRow = parseInt(sq.dataset.row);
+    const startCol = parseInt(sq.dataset.col);
+    
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        if (isValidMove(piece, startRow, startCol, r, c)) {
+          validMoves.push({
+            piece: piece,
+            startRow: startRow,
+            startCol: startCol,
+            endRow: r,
+            endCol: c
+          });
+        }
+      }
+    }
+  }
+  
+  if (validMoves.length > 0) {
+    // Choose a random valid move (simple AI)
+    const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+    performMove(
+      randomMove.piece,
+      randomMove.startRow,
+      randomMove.startCol,
+      randomMove.endRow,
+      randomMove.endCol
+    );
+  }
 }
 
 function calculateFinalScores() {
-  // Get all remaining pieces
   const redPieces = document.querySelectorAll(".piece.red");
   const bluePieces = document.querySelectorAll(".piece.blue");
-
-  // Sum their values
   let redRemaining = 0;
   redPieces.forEach((piece) => {
-    redRemaining += parseFloat(piece.dataset.value) || 0;
+    const val = parseFloat(piece.dataset.value);
+    const mult = piece.classList.contains("king") ? 2 : 1;
+    redRemaining += val * mult;
   });
-
   let blueRemaining = 0;
   bluePieces.forEach((piece) => {
-    blueRemaining += parseFloat(piece.dataset.value) || 0;
+    const val = parseFloat(piece.dataset.value);
+    const mult = piece.classList.contains("king") ? 2 : 1;
+    blueRemaining += val * mult;
   });
-
-  // Add to current scores
   redScore += redRemaining;
   blueScore += blueRemaining;
-
-  // Update UI with 2 decimal places (DepEd compliant)
-  redScoreEl.textContent = redScore.toFixed(2);
-  blueScoreEl.textContent = blueScore.toFixed(2);
-
-  // Log final scores
-  console.log(
-    `Final Scores - Red: ${redScore.toFixed(2)}, Blue: ${blueScore.toFixed(2)}`
-  );
-  console.log(`Red remaining pieces value: ${redRemaining.toFixed(2)}`);
-  console.log(`Blue remaining pieces value: ${blueRemaining.toFixed(2)}`);
-
+  if (redRemaining !== 0) {
+    logMove({
+      type: "final-tally",
+      player: "red",
+      value: redRemaining,
+    });
+  }
+  if (blueRemaining !== 0) {
+    logMove({
+      type: "final-tally",
+      player: "blue",
+      value: blueRemaining,
+    });
+  }
   return { red: redScore, blue: blueScore };
 }
 
-// Save current board state
 function saveBoardState() {
   const state = {
     redScore: redScore,
     blueScore: blueScore,
     currentPlayer: currentPlayer,
-    mustCaptureWithPiece: mustCaptureWithPiece ? 
-      { row: parseInt(mustCaptureWithPiece.parentElement.dataset.row), 
-        col: parseInt(mustCaptureWithPiece.parentElement.dataset.col) } : null,
-    pieces: []
+    mustCaptureWithPiece: mustCaptureWithPiece
+      ? {
+          row: parseInt(mustCaptureWithPiece.parentElement.dataset.row),
+          col: parseInt(mustCaptureWithPiece.parentElement.dataset.col),
+        }
+      : null,
+    pieces: [],
   };
-
-  // Save all pieces
-  document.querySelectorAll('.piece').forEach(piece => {
+  document.querySelectorAll(".piece").forEach((piece) => {
     const square = piece.parentElement;
-    // Get the piece key from data-value or reconstruct it
     const value = piece.dataset.value;
-    const color = piece.classList.contains('red') ? 'red' : 'blue';
-    
-    // Find the original piece key from PIECES object
+    const color = piece.classList.contains("red") ? "red" : "blue";
     let pieceKey = null;
     for (const key in PIECES) {
-      if (PIECES[key].color === color && PIECES[key].value.toString() === value) {
+      if (
+        PIECES[key].color === color &&
+        PIECES[key].value.toString() === value
+      ) {
         pieceKey = key;
         break;
       }
     }
-    // Fallback if not found
     if (!pieceKey) {
-      pieceKey = color === 'red' ? `r${Math.abs(value)}` : `b${Math.abs(value)}`;
+      pieceKey =
+        color === "red" ? `r${Math.abs(value)}` : `b${Math.abs(value)}`;
     }
-
     state.pieces.push({
       key: pieceKey,
       row: parseInt(square.dataset.row),
       col: parseInt(square.dataset.col),
-      isKing: piece.classList.contains('king'),
-      value: value
+      isKing: piece.classList.contains("king"),
+      value: value,
     });
   });
-
   return state;
 }
 
-// Restore board state
 function restoreBoardState(state) {
-  // Clear board
-  document.querySelectorAll('.piece').forEach(p => p.remove());
-  
-  // Restore pieces
-  state.pieces.forEach(pieceData => {
-    const square = document.querySelector(`.square[data-row='${pieceData.row}'][data-col='${pieceData.col}']`);
+  document.querySelectorAll(".piece").forEach((p) => p.remove());
+  state.pieces.forEach((pieceData) => {
+    const square = document.querySelector(
+      `.square[data-row='${pieceData.row}'][data-col='${pieceData.col}']`
+    );
     if (!square) return;
-
-    // Extract color from piece key (e.g., "r7" → "red", "b3" → "blue")
-    const color = pieceData.key.startsWith('r') ? 'red' : 'blue';
-    
-    const piece = document.createElement('div');
-    piece.classList.add('piece', color);
-    if (pieceData.isKing) piece.classList.add('king');
+    const color = pieceData.key.startsWith("r") ? "red" : "blue";
+    const piece = document.createElement("div");
+    piece.classList.add("piece", color);
+    if (pieceData.isKing) piece.classList.add("king");
     piece.dataset.value = pieceData.value;
     piece.draggable = true;
     piece.tabIndex = 0;
-
-    const numberLabel = document.createElement('span');
-    numberLabel.classList.add('piece-number');
+    const numberLabel = document.createElement("span");
+    numberLabel.classList.add("piece-number");
     numberLabel.textContent = pieceData.value;
     piece.appendChild(numberLabel);
     square.appendChild(piece);
   });
-
-  // Restore game state
   redScore = state.redScore;
   blueScore = state.blueScore;
   currentPlayer = state.currentPlayer;
   redScoreEl.textContent = redScore.toFixed(2);
   blueScoreEl.textContent = blueScore.toFixed(2);
   currentPlayerEl.textContent = currentPlayer;
-
-  // Restore mustCaptureWithPiece
+  const currentPlayerLabel = document.querySelector(".current-player-label");
+  if (currentPlayerLabel) {
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
   mustCaptureWithPiece = null;
   if (state.mustCaptureWithPiece) {
     const { row, col } = state.mustCaptureWithPiece;
-    const square = document.querySelector(`.square[data-row='${row}'][data-col='${col}']`);
+    const square = document.querySelector(
+      `.square[data-row='${row}'][data-col='${col}']`
+    );
     if (square) {
-      mustCaptureWithPiece = square.querySelector('.piece');
+      mustCaptureWithPiece = square.querySelector(".piece");
     }
   }
-
-  // Update UI
   clearValidMoves();
   if (!replayMode) {
     if (roundInterval) clearInterval(roundInterval);
     roundMinutes = 1;
     roundSeconds = 0;
-    roundEl.className = 'timer';
-    roundEl.classList.add(currentPlayer === 'red' ? 'timer-red' : 'timer-blue');
+    roundEl.className = "timer";
+    roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
     startRoundTimer();
   }
 }
 
 // ================== DEPED SCORING ==================
-function calculateSciDamathScore(capturingValue, operator, capturedValue) {
+function calculateSciDamathScore(capturingPiece, capturedPiece, operator) {
+  const capturingValue = parseFloat(capturingPiece.dataset.value);
+  const capturedValue = parseFloat(capturedPiece.dataset.value);
+  const isCapturingKing = capturingPiece.classList.contains("king");
+  const isCapturedKing = capturedPiece.classList.contains("king");
   let result;
-
-  // Handle division by zero
   if (operator.trim().includes("÷") || operator.trim() === "/") {
     if (capturedValue === 0) {
       console.warn("Sci-Damath: Division by zero! Score = 0.00");
       return 0.0;
     }
   }
-
   switch (operator.trim()) {
     case "+":
       result = capturingValue + capturedValue;
@@ -316,6 +453,7 @@ function calculateSciDamathScore(capturingValue, operator, capturedValue) {
       break;
     case "x":
     case "×":
+    case "*":
       result = capturingValue * capturedValue;
       break;
     case "÷":
@@ -326,9 +464,14 @@ function calculateSciDamathScore(capturingValue, operator, capturedValue) {
       console.error("Unknown operator:", operator);
       result = 0;
   }
-
-  // DepEd rounding: 2 decimal places, standard rounding
-  const rounded = Math.round(result * 100) / 100;
+  let multiplier = 1;
+  if (isCapturingKing && isCapturedKing) {
+    multiplier = 4;
+  } else if (isCapturingKing || isCapturedKing) {
+    multiplier = 2;
+  }
+  const finalResult = result * multiplier;
+  const rounded = Math.round(finalResult * 100) / 100;
   return Number(rounded.toFixed(2));
 }
 
@@ -347,7 +490,6 @@ function playerHasMandatoryCapture(color) {
 function hasMandatoryCapture(piece, startRow, startCol) {
   const color = piece.classList.contains("red") ? "red" : "blue";
   const isKing = piece.classList.contains("king");
-
   if (isKing) {
     const directions = [
       [-1, -1],
@@ -359,13 +501,11 @@ function hasMandatoryCapture(piece, startRow, startCol) {
       let r = startRow + dRow;
       let c = startCol + dCol;
       let opponentFound = false;
-
       while (r >= 0 && r <= 7 && c >= 0 && c <= 7) {
         const sq = document.querySelector(
           `.square[data-row='${r}'][data-col='${c}']`
         );
         const p = sq?.querySelector(".piece");
-
         if (p) {
           if (p.classList.contains(color)) break;
           if (opponentFound) break;
@@ -385,7 +525,6 @@ function hasMandatoryCapture(piece, startRow, startCol) {
       }
     }
   } else {
-    // Regular pieces: ALL 4 directions for captures (Sci-Damath rule)
     const directions = [
       [-2, -2],
       [-2, 2],
@@ -397,20 +536,16 @@ function hasMandatoryCapture(piece, startRow, startCol) {
       const midCol = startCol + dCol / 2;
       const endRow = startRow + dRow;
       const endCol = startCol + dCol;
-
       if (endRow < 0 || endRow > 7 || endCol < 0 || endCol > 7) continue;
       if (midRow < 0 || midRow > 7 || midCol < 0 || midCol > 7) continue;
-
       const midSq = document.querySelector(
         `.square[data-row='${midRow}'][data-col='${midCol}']`
       );
       const endSq = document.querySelector(
         `.square[data-row='${endRow}'][data-col='${endCol}']`
       );
-
       const midPiece = midSq?.querySelector(".piece");
       const endPiece = endSq?.querySelector(".piece");
-
       if (midPiece && !midPiece.classList.contains(color) && !endPiece) {
         return true;
       }
@@ -424,7 +559,6 @@ function isDiagonalPathClear(startRow, startCol, endRow, endCol, color) {
   const dCol = endCol > startCol ? 1 : -1;
   let r = startRow + dRow;
   let c = startCol + dCol;
-
   while (r !== endRow || c !== endCol) {
     const sq = document.querySelector(
       `.square[data-row='${r}'][data-col='${c}']`
@@ -439,17 +573,14 @@ function isDiagonalPathClear(startRow, startCol, endRow, endCol, color) {
 function isCaptureMove(piece, startRow, startCol, endRow, endCol) {
   const color = piece.classList.contains("red") ? "red" : "blue";
   const isKing = piece.classList.contains("king");
-
   if (isKing) {
     if (Math.abs(endRow - startRow) !== Math.abs(endCol - startCol))
       return false;
     const dRow = endRow > startRow ? 1 : -1;
     const dCol = endCol > startCol ? 1 : -1;
-
     let r = startRow + dRow;
     let c = startCol + dCol;
     let captured = false;
-
     while (r !== endRow || c !== endCol) {
       const sq = document.querySelector(
         `.square[data-row='${r}'][data-col='${c}']`
@@ -464,9 +595,12 @@ function isCaptureMove(piece, startRow, startCol, endRow, endCol) {
     }
     return captured;
   } else {
-    // Regular pieces: ANY diagonal capture (forward/backward)
     if (Math.abs(endRow - startRow) !== 2 || Math.abs(endCol - startCol) !== 2)
       return false;
+    const endSq = document.querySelector(
+      `.square[data-row='${endRow}'][data-col='${endCol}']`
+    );
+    if (endSq?.querySelector(".piece")) return false;
     const midRow = (startRow + endRow) / 2;
     const midCol = (startCol + endCol) / 2;
     const midSq = document.querySelector(
@@ -487,18 +621,13 @@ function isValidMove(piece, startRow, startCol, endRow, endCol) {
     target.querySelector(".piece")
   )
     return false;
-
   const color = piece.classList.contains("red") ? "red" : "blue";
   const isKing = piece.classList.contains("king");
   const rowDiff = endRow - startRow;
   const colDiff = endCol - startCol;
-
-  // Global mandatory capture rule
   if (playerHasMandatoryCapture(color)) {
     return isCaptureMove(piece, startRow, startCol, endRow, endCol);
   }
-
-  // Non-capture moves: forward only for regular pieces
   if (isKing) {
     if (Math.abs(rowDiff) !== Math.abs(colDiff) || rowDiff === 0) return false;
     return isDiagonalPathClear(startRow, startCol, endRow, endCol, color);
@@ -514,12 +643,10 @@ function findCapturedPieces(startRow, startCol, endRow, endCol, color) {
   const captured = [];
   if (Math.abs(endRow - startRow) !== Math.abs(endCol - startCol))
     return captured;
-
   const dRow = endRow > startRow ? 1 : -1;
   const dCol = endCol > startCol ? 1 : -1;
   let r = startRow + dRow;
   let c = startCol + dCol;
-
   while (r !== endRow || c !== endCol) {
     const sq = document.querySelector(
       `.square[data-row='${r}'][data-col='${c}']`
@@ -538,9 +665,7 @@ function checkForChainCapture(piece, row, col) {
 
 // ================== MOVE HISTORY ==================
 function logMove(moveData) {
-  if (replayMode) return; // Don't log during replay
-
-  // Create move entry
+  if (replayMode) return;
   const moveEntry = {
     type: moveData.type,
     player: moveData.player,
@@ -553,43 +678,42 @@ function logMove(moveData) {
     endRow: moveData.endRow,
     endCol: moveData.endCol,
   };
-
-  // Truncate future entries if we're in the middle of history
   moveHistoryEntries = moveHistoryEntries.slice(0, currentHistoryIndex + 1);
-
-  // Add new entry
   moveHistoryEntries.push(moveEntry);
   currentHistoryIndex++;
-
-  // Update DOM
   updateMoveHistoryDOM();
 }
 
-// New function to update move history DOM based on current index
 function updateMoveHistoryDOM() {
   const historyList = document.getElementById("move-history-content");
   if (!historyList) return;
-
-  // Clear current history
   historyList.innerHTML = "";
-
-  // Add entries up to current index
   for (let i = 0; i <= currentHistoryIndex; i++) {
     const entry = moveHistoryEntries[i];
     const moveItem = document.createElement("li");
     moveItem.className = `move-item ${entry.player}`;
-
     let moveText = "";
     if (entry.type === "capture") {
+      let multiplier = 1;
+      let multiplierText = "×1";
+      if (entry.isCapturingKing && entry.isCapturedKing) {
+        multiplier = 4;
+        multiplierText = "×4 (DAMA vs DAMA)";
+      } else if (entry.isCapturingKing || entry.isCapturedKing) {
+        multiplier = 2;
+        multiplierText = "×2 (DAMA involved)";
+      }
+      const resultClass =
+        entry.result > 0 ? "positive" : entry.result < 0 ? "negative" : "zero";
       moveText = `
-        <strong>${entry.player.toUpperCase()}</strong>: 
-        ${entry.piece}(${entry.capturingValue}) 
-        <span class="operator">${entry.operator}</span> 
-        (${entry.capturedValue}) = 
-        <span class="result ${entry.result >= 0 ? "positive" : "negative"}">
-          ${entry.result.toFixed(2)}
-        </span>
-      `;
+    <strong>${entry.player.toUpperCase()}</strong>: 
+    ${entry.piece}(${entry.capturingValue}) 
+    <span class="operator">${entry.operator}</span> 
+    (${entry.capturedValue}) = 
+    <span class="result ${resultClass}">
+      ${entry.result.toFixed(2)} (${multiplierText})
+    </span>
+  `;
     } else if (entry.type === "move") {
       moveText = `
         <strong>${entry.player.toUpperCase()}</strong>: 
@@ -602,13 +726,18 @@ function updateMoveHistoryDOM() {
         <strong>${entry.player.toUpperCase()}</strong>: 
         ${entry.piece} promoted to DAMA!
       `;
+    } else if (entry.type === "final-tally") {
+      moveText = `
+    <strong>${entry.player.toUpperCase()}</strong>: 
+    Final tally of remaining pieces = 
+    <span class="result ${entry.value >= 0 ? "positive" : "negative"}">
+      ${entry.value.toFixed(2)} (×2 for each DAMA)
+    </span>
+  `;
     }
-
     moveItem.innerHTML = moveText;
     historyList.appendChild(moveItem);
   }
-
-  // Auto-scroll to bottom
   const scrollableContainer = document.querySelector(
     ".move-history-scrollable"
   );
@@ -620,17 +749,13 @@ function updateMoveHistoryDOM() {
 // ================== PERFORM MOVE ==================
 function performMove(piece, startRow, startCol, endRow, endCol) {
   if (gameOver || replayMode) return;
-
   const color = piece.classList.contains("red") ? "red" : "blue";
   const pieceKey =
     Array.from(piece.classList).find((cls) => cls.match(/^[rb]\d+$/)) ||
     "piece";
   const pieceValue = parseInt(piece.dataset.value, 10);
-
-  // === CAPTURE DETECTION ===
   let capturedPieces = [];
   const isKing = piece.classList.contains("king");
-
   if (isKing) {
     capturedPieces = findCapturedPieces(
       startRow,
@@ -646,42 +771,47 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     ) {
       const midRow = (startRow + endRow) / 2;
       const midCol = (startCol + endCol) / 2;
-      const midPiece = document.querySelector(
-        `.square[data-row='${midRow}'][data-col='${midCol}'] .piece`
+      if (midRow < 0 || midRow > 7 || midCol < 0 || midCol > 7) {
+        console.warn("Invalid mid position:", midRow, midCol);
+        return;
+      }
+      const midSquare = document.querySelector(
+        `.square[data-row='${midRow}'][data-col='${midCol}']`
       );
-      if (midPiece) capturedPieces.push(midPiece);
+      const midPiece = midSquare?.querySelector(".piece");
+      if (midPiece && !midPiece.classList.contains(color)) {
+        capturedPieces.push(midPiece);
+      }
     }
   }
-
   let scoreChange = 0;
-  let operator = "";
-  let capturedValue = 0;
-
   if (capturedPieces.length > 0) {
-    operator = getMathSymbol(endRow, endCol);
-    capturedValue = parseInt(capturedPieces[0].dataset.value, 10);
-    scoreChange = calculateSciDamathScore(pieceValue, operator, capturedValue);
-
+    const capturedPiece = capturedPieces[0];
+    if (!capturedPiece) {
+      console.error("Captured piece is undefined!");
+      return;
+    }
+    const operator = getMathSymbol(endRow, endCol);
+    scoreChange = calculateSciDamathScore(piece, capturedPiece, operator);
     if (color === "red") redScore += scoreChange;
     else blueScore += scoreChange;
-
     redScoreEl.textContent = redScore.toFixed(2);
     blueScoreEl.textContent = blueScore.toFixed(2);
-
-    // ✅ LOG CAPTURE MOVE
+    playSound("capture");
     logMove({
       type: "capture",
       player: color,
       piece: pieceKey,
-      capturingValue: pieceValue,
+      capturingValue: parseInt(piece.dataset.value, 10),
       operator: operator,
-      capturedValue: capturedValue,
+      capturedValue: parseInt(capturedPiece.dataset.value, 10),
       result: scoreChange,
+      isCapturingKing: piece.classList.contains("king"),
+      isCapturedKing: capturedPiece.classList.contains("king"),
     });
-
     capturedPieces.forEach((p) => p.remove());
   } else {
-    // ✅ LOG REGULAR MOVE
+    playSound("move");
     logMove({
       type: "move",
       player: color,
@@ -691,14 +821,11 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       endCol: endCol,
     });
   }
-
-  // === MOVE THE PIECE ===
+  const startSq = piece.parentElement;
   const endSq = document.querySelector(
     `.square[data-row='${endRow}'][data-col='${endCol}']`
   );
   endSq.appendChild(piece);
-
-  // === KING PROMOTION ===
   let wasPromoted = false;
   if (!isKing) {
     if (color === "red" && endRow === 0) {
@@ -710,17 +837,14 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       wasPromoted = true;
     }
   }
-
   if (wasPromoted) {
-    // ✅ LOG PROMOTION
+    playSound("promotion");
     logMove({
       type: "promotion",
       player: color,
       piece: pieceKey,
     });
   }
-
-  // === CHAIN CAPTURE LOGIC ===
   if (
     capturedPieces.length > 0 &&
     checkForChainCapture(piece, endRow, endCol)
@@ -730,23 +854,20 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     mustCaptureWithPiece = null;
     switchTurn();
   }
-
-  // === SAVE BOARD STATE FOR UNDO/REDO (SIMPLE VERSION) ===
   moveHistoryStates = moveHistoryStates.slice(0, currentMoveIndex + 1);
   const currentState = saveBoardState();
   moveHistoryStates.push(currentState);
   currentMoveIndex++;
-
-  // === VISUAL FEEDBACK ===
-  highlightSquareSymbol(endRow, endCol);
+  if (!replayMode) {
+    highlightMoveSquares(startRow, startCol, endRow, endCol);
+  }
   clearValidMoves();
-
   if (!timersStarted) {
     timersStarted = true;
     startSessionTimer();
     startRoundTimer();
+    playSound("gameStart");
   }
-
   setTimeout(() => checkGameOver(), 100);
 }
 
@@ -790,83 +911,121 @@ function showValidMoves(piece, startRow, startCol) {
 }
 
 function clearValidMoves() {
-  document
-    .querySelectorAll(".square.valid-move")
-    .forEach((sq) => sq.classList.remove("valid-move"));
+  document.querySelectorAll(".square.valid-move").forEach((sq) => {
+    sq.classList.remove("valid-move");
+  });
+  document.querySelectorAll(".square.piece-dragging").forEach((sq) => {
+    sq.classList.remove("piece-dragging");
+  });
 }
 
 // ================== INPUT HANDLERS ==================
 gameboard.addEventListener("click", (e) => {
+  // Prevent player interaction during AI turn in PvAI mode
+  if (gameMode === 'pvai' && currentPlayer === 'blue') {
+    return;
+  }
+  
   const piece = e.target.closest(".piece");
   const square = e.target.closest(".square");
-
   if (!square || !square.classList.contains("playable")) return;
-  if (mustCaptureWithPiece && piece !== mustCaptureWithPiece) return;
-
   if (piece && piece.classList.contains(currentPlayer)) {
-    if (selectedPiece) selectedPiece.classList.remove("selected");
+    document.querySelectorAll(".square.piece-selected").forEach((sq) => {
+      sq.classList.remove("piece-selected");
+    });
     selectedPiece = piece;
-    selectedPiece.classList.add("selected");
-
-    const startSq = piece.parentElement;
-    const startRow = parseInt(startSq.dataset.row, 10);
-    const startCol = parseInt(startSq.dataset.col, 10);
+    const pieceSquare = piece.parentElement;
+    const startRow = parseInt(pieceSquare.dataset.row, 10);
+    const startCol = parseInt(pieceSquare.dataset.col, 10);
     showValidMoves(piece, startRow, startCol);
     return;
   }
-
   if (selectedPiece && square) {
     const startSq = selectedPiece.parentElement;
     const startRow = parseInt(startSq.dataset.row, 10);
     const startCol = parseInt(startSq.dataset.col, 10);
     const endRow = parseInt(square.dataset.row, 10);
     const endCol = parseInt(square.dataset.col, 10);
-
     if (isValidMove(selectedPiece, startRow, startCol, endRow, endCol)) {
       performMove(selectedPiece, startRow, startCol, endRow, endCol);
-    } else if (playerHasMandatoryCapture(currentPlayer)) {
-      square.classList.add("invalid-move");
-      setTimeout(() => square.classList.remove("invalid-move"), 300);
     }
-
-    if (selectedPiece) selectedPiece.classList.remove("selected");
     selectedPiece = null;
+    clearValidMoves();
   }
 });
 
 gameboard.addEventListener("dragstart", (e) => {
+  // Prevent player interaction during AI turn in PvAI mode
+  if (gameMode === 'pvai' && currentPlayer === 'blue') {
+    e.preventDefault();
+    return;
+  }
+  
   const piece = e.target.closest(".piece");
-  if (!piece || !piece.classList.contains(currentPlayer)) e.preventDefault();
-  else selectedPiece = piece;
+  if (!piece || !piece.classList.contains(currentPlayer)) {
+    e.preventDefault();
+    return;
+  }
+  const originalSquare = piece.parentElement;
+  originalSquare.classList.add("piece-dragging");
+  e.dataTransfer.setDragImage(
+    piece,
+    piece.offsetWidth / 2,
+    piece.offsetHeight / 2
+  );
+  selectedPiece = piece;
+  const pieceSquare = piece.parentElement;
+  pieceSquare.classList.add("piece-dragging");
+  const startRow = parseInt(pieceSquare.dataset.row, 10);
+  const startCol = parseInt(pieceSquare.dataset.col, 10);
+  showValidMoves(piece, startRow, startCol);
 });
 
-gameboard.addEventListener("dragover", (e) => e.preventDefault());
+function cleanupDrag() {
+  document.querySelectorAll(".square.piece-dragging").forEach((sq) => {
+    sq.classList.remove("piece-dragging");
+  });
+}
+
+gameboard.addEventListener("dragend", (e) => {
+  if (selectedPiece) {
+    selectedPiece.parentElement.classList.remove("piece-dragging");
+    selectedPiece = null;
+    clearValidMoves();
+    cleanupDrag();
+  }
+});
+
+gameboard.addEventListener("dragover", (e) => {
+  e.preventDefault();
+});
 
 gameboard.addEventListener("drop", (e) => {
   e.preventDefault();
-  const square = e.target.closest(".square");
-  if (!square || !square.classList.contains("playable") || !selectedPiece)
-    return;
-  if (mustCaptureWithPiece && selectedPiece !== mustCaptureWithPiece) {
-    selectedPiece = null;
+  // Prevent player interaction during AI turn in PvAI mode
+  if (gameMode === 'pvai' && currentPlayer === 'blue') {
+    cleanupDrag();
     return;
   }
-
+  
+  const square = e.target.closest(".square");
+  if (!square || !square.classList.contains("playable") || !selectedPiece) {
+    cleanupDrag();
+    return;
+  }
   const startSq = selectedPiece.parentElement;
   const startRow = parseInt(startSq.dataset.row, 10);
   const startCol = parseInt(startSq.dataset.col, 10);
   const endRow = parseInt(square.dataset.row, 10);
   const endCol = parseInt(square.dataset.col, 10);
-
   if (isValidMove(selectedPiece, startRow, startCol, endRow, endCol)) {
     performMove(selectedPiece, startRow, startCol, endRow, endCol);
-  } else if (playerHasMandatoryCapture(currentPlayer)) {
-    square.classList.add("invalid-move");
-    setTimeout(() => square.classList.remove("invalid-move"), 300);
   }
-
-  if (selectedPiece) selectedPiece.classList.remove("selected");
-  selectedPiece = null;
+  if (selectedPiece) {
+    selectedPiece.parentElement.classList.remove("piece-dragging");
+    selectedPiece = null;
+  }
+  clearValidMoves();
 });
 
 // ================== TIMERS ==================
@@ -893,9 +1052,12 @@ function startRoundTimer() {
   if (roundInterval) clearInterval(roundInterval);
   roundInterval = setInterval(() => {
     if (roundSeconds === 0) {
-      if (roundMinutes === 0) {
+      if (roundMinutes === 0 && roundSeconds === 0) {
         clearInterval(roundInterval);
-        alert(`Time's up for ${currentPlayer}!`);
+        clearInterval(sessionInterval);
+        const loser = currentPlayer;
+        const winner = loser === "red" ? "Blue" : "Red";
+        endGame(`${winner} wins! (${loser} ran out of round time)`);
         return;
       }
       roundMinutes--;
@@ -942,8 +1104,6 @@ function placeInitialPieces() {
     piece.appendChild(label);
     square.appendChild(piece);
   }
-
-  // Initialize simple state system
   setTimeout(() => {
     const initialState = saveBoardState();
     moveHistoryStates = [initialState];
@@ -963,7 +1123,6 @@ function resetGame() {
   mustCaptureWithPiece = null;
   selectedPiece = null;
   gameOver = false;
-
   if (sessionInterval) clearInterval(sessionInterval);
   if (roundInterval) clearInterval(roundInterval);
   timersStarted = false;
@@ -972,51 +1131,46 @@ function resetGame() {
   roundMinutes = 1;
   roundSeconds = 0;
   updateTimerDisplay();
-
-  // Reset unified state system
-  gameStates = [];
-  currentStateIndex = -1;
+  moveHistoryStates = [];
+  currentMoveIndex = -1;
+  moveHistoryEntries = [];
+  currentHistoryIndex = -1;
   replayMode = false;
   if (replayInterval) clearInterval(replayInterval);
-
+  if (errorMessageEl) errorMessageEl.hidden = true;
   placeInitialPieces();
 }
 
 function setupDebugControls() {
   const toggle = document.getElementById("debug-toggle");
   const reset = document.getElementById("reset-board");
-
-  toggle?.addEventListener("click", () => {
-    debugMode = !debugMode;
-    toggle.textContent = `Debug Mode: ${debugMode ? "ON" : "OFF"}`;
-    toggle.style.background = debugMode ? "#51cf66" : "#ff6b6b";
-    resetGame();
-  });
-
-  reset?.addEventListener("click", resetGame);
-
   const endGameBtn = document.getElementById("end-game");
+  const surrenderBtn = document.getElementById("surrender");
+  const agreeBtn = document.getElementById("agree-finish");
+  const undoBtn = document.getElementById("undo");
+  const redoBtn = document.getElementById("redo");
+  const replayBtn = document.getElementById("replay");
+  const stopReplayBtn = document.getElementById("stop-replay");
+  const transparencyBtn = document.getElementById("toggle-transparency");
+  const backToMenuBtn = document.getElementById("back-to-menu");
+  const darkModeBtn = document.getElementById("toggle-dark-mode"); // ✅ ADDED
+
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      debugMode = !debugMode;
+      toggle.textContent = `Debug Mode: ${debugMode ? "ON" : "OFF"}`;
+      toggle.classList.toggle("debug-on", debugMode);
+      resetGame();
+    });
+  }
+  if (reset) reset.addEventListener("click", resetGame);
   if (endGameBtn) {
     endGameBtn.addEventListener("click", () => {
       if (sessionInterval) clearInterval(sessionInterval);
       if (roundInterval) clearInterval(roundInterval);
-
-      const finalScores = calculateFinalScores();
-
-      let winner = "It's a tie!";
-      if (finalScores.red > finalScores.blue) winner = "Red wins!";
-      else if (finalScores.blue > finalScores.red) winner = "Blue wins!";
-
-      alert(
-        `Game ended!\n\nFinal Scores:\nRed: ${finalScores.red.toFixed(
-          2
-        )}\nBlue: ${finalScores.blue.toFixed(2)}\n\n${winner}`
-      );
+      endGame("Game ended manually");
     });
   }
-
-  // Surrender button
-  const surrenderBtn = document.getElementById("surrender");
   if (surrenderBtn) {
     surrenderBtn.addEventListener("click", () => {
       if (
@@ -1028,9 +1182,6 @@ function setupDebugControls() {
       }
     });
   }
-
-  // Mutual agreement button
-  const agreeBtn = document.getElementById("agree-finish");
   if (agreeBtn) {
     agreeBtn.addEventListener("click", () => {
       if (!gameOver && confirm("Do both players agree to end the game?")) {
@@ -1038,32 +1189,67 @@ function setupDebugControls() {
       }
     });
   }
-  // Undo/Redo/Replay buttons
-  const undoBtn = document.getElementById("undo");
-  const redoBtn = document.getElementById("redo");
-  const replayBtn = document.getElementById("replay");
-  const stopReplayBtn = document.getElementById("stop-replay");
-
-  if (undoBtn) {
-    undoBtn.addEventListener("click", undoMove);
-  }
-  if (redoBtn) {
-    redoBtn.addEventListener("click", redoMove);
-  }
+  if (undoBtn) undoBtn.addEventListener("click", undoMove);
+  if (redoBtn) redoBtn.addEventListener("click", redoMove);
   if (replayBtn) {
     replayBtn.addEventListener("click", () => {
       if (confirm("Start replay from beginning?")) {
-        startReplay(1000); // 1 second per move
+        startReplay(1000);
       }
     });
   }
-  if (stopReplayBtn) {
-    stopReplayBtn.addEventListener("click", stopReplay);
-  }
-
-  const transparencyBtn = document.getElementById("toggle-transparency");
+  if (stopReplayBtn) stopReplayBtn.addEventListener("click", stopReplay);
   if (transparencyBtn) {
     transparencyBtn.addEventListener("click", togglePieceTransparency);
+  }
+  if (backToMenuBtn) {
+    backToMenuBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (confirm("Return to main menu? Current game will be lost.")) {
+        // Get current file's directory
+        const currentDir = window.location.href.substring(
+          0,
+          window.location.href.lastIndexOf("/")
+        );
+
+        // Go up to project root and then into src/
+        const menuPath = currentDir.split("src")[0] + "src/index.html";
+
+        window.location.href = menuPath;
+      }
+    });
+  }
+
+  // ✅ DARK MODE LOGIC MOVED HERE
+  if (darkModeBtn) {
+    const savedTheme = localStorage.getItem("theme");
+    const systemPrefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    ).matches;
+    let isDark =
+      savedTheme === "dark" || (savedTheme !== "light" && systemPrefersDark);
+
+    function applyTheme(dark) {
+      if (dark) {
+        document.body.setAttribute("data-theme", "dark");
+      } else {
+        document.body.removeAttribute("data-theme");
+      }
+    }
+
+    function updateButtonLabel() {
+      darkModeBtn.textContent = isDark ? "Light Mode" : "Dark Mode";
+    }
+
+    applyTheme(isDark);
+    updateButtonLabel();
+
+    darkModeBtn.addEventListener("click", () => {
+      isDark = !isDark;
+      applyTheme(isDark);
+      updateButtonLabel();
+      localStorage.setItem("theme", isDark ? "dark" : "light");
+    });
   }
 }
 
@@ -1071,25 +1257,29 @@ function setupDebugControls() {
 function checkGameOver() {
   if (gameOver) return true;
 
+  // ✅ HANDLE SURRENDER FIRST (no score calculation)
+  if (surrenderRequested) {
+    const winner = surrenderRequested === "red" ? "Blue" : "Red";
+    endGame(`${winner} wins! (${surrenderRequested} surrendered)`, true); // 👈 true = isSurrender
+    return true;
+  }
+
   const redPieces = document.querySelectorAll(".piece.red").length;
   const bluePieces = document.querySelectorAll(".piece.blue").length;
   const currentPlayerPieces = currentPlayer === "red" ? redPieces : bluePieces;
 
-  // Condition 1: Current player has no chips
   if (currentPlayerPieces === 0) {
     const winner = currentPlayer === "red" ? "Blue" : "Red";
     endGame(`${winner} wins! (Opponent has no chips)`);
     return true;
   }
 
-  // Condition 2: Current player has no possible moves
   if (!playerHasAnyValidMove(currentPlayer)) {
     const winner = currentPlayer === "red" ? "Blue" : "Red";
     endGame(`${winner} wins! (Opponent has no valid moves)`);
     return true;
   }
 
-  // Condition 3: Single chip + move repetition (3 repetitions for practicality)
   if (currentPlayerPieces === 1 && moveHistory.length >= 6) {
     const lastThree = moveHistory.slice(-3);
     const prevThree = moveHistory.slice(-6, -3);
@@ -1099,28 +1289,15 @@ function checkGameOver() {
     }
   }
 
-  // Condition 5: Surrender
-  if (surrenderRequested) {
-    const winner = surrenderRequested === "red" ? "Blue" : "Red";
-    endGame(`${winner} wins! (${surrenderRequested} surrendered)`);
-    return true;
-  }
-
-  // Condition 6: Mutual agreement (handled by direct endGame() call)
-  // Condition 4: 20-minute timeout (handled by session timer)
-
   return false;
 }
 
-// Helper: Check if player has ANY valid move
 function playerHasAnyValidMove(color) {
   const pieces = document.querySelectorAll(`.piece.${color}`);
   for (const piece of pieces) {
     const sq = piece.parentElement;
     const row = parseInt(sq.dataset.row, 10);
     const col = parseInt(sq.dataset.col, 10);
-
-    // Check all playable squares for valid moves
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
         const targetSq = document.querySelector(
@@ -1137,82 +1314,59 @@ function playerHasAnyValidMove(color) {
   return false;
 }
 
-function endGame(reason) {
+function endGame(reason, isSurrender = false) {
   if (gameOver) return;
   gameOver = true;
 
-  // Stop all timers
   if (sessionInterval) clearInterval(sessionInterval);
   if (roundInterval) clearInterval(roundInterval);
+  playSound("gameEnd");
 
-  // Calculate final scores: add remaining pieces' values
-  const redPieces = document.querySelectorAll(".piece.red");
-  const bluePieces = document.querySelectorAll(".piece.blue");
+  if (isSurrender) {
+    // ✅ For surrender: show ONLY the reason (no scores)
+    alert(`GAME OVER\n${reason}`);
+    console.log("Game Over:", reason);
+    return;
+  }
 
-  let redRemaining = 0;
-  redPieces.forEach((piece) => {
-    const value = parseFloat(piece.dataset.value);
-    if (!isNaN(value)) redRemaining += value;
-  });
+  // ✅ Only calculate scores for non-surrender endings
+  const finalScores = calculateFinalScores();
+  const finalRed = finalScores.red.toFixed(2);
+  const finalBlue = finalScores.blue.toFixed(2);
 
-  let blueRemaining = 0;
-  bluePieces.forEach((piece) => {
-    const value = parseFloat(piece.dataset.value);
-    if (!isNaN(value)) blueRemaining += value;
-  });
-
-  // Add remaining values to current scores
-  redScore += redRemaining;
-  blueScore += blueRemaining;
-
-  // Format scores to 2 decimal places (DepEd compliant)
-  const finalRed = redScore.toFixed(2);
-  const finalBlue = blueScore.toFixed(2);
-
-  // Determine winner based on final scores
   let winnerMessage = "";
-  const redNum = parseFloat(finalRed);
-  const blueNum = parseFloat(finalBlue);
-
-  if (redNum > blueNum) {
+  const redScore = parseFloat(finalRed);
+  const blueScore = parseFloat(finalBlue);
+  if (redScore < blueScore) {
     winnerMessage = "Red wins!";
-  } else if (blueNum > redNum) {
+  } else if (blueScore < redScore) {
     winnerMessage = "Blue wins!";
   } else {
     winnerMessage = "It's a draw!";
   }
 
-  // Create detailed final message
   const finalMessage =
-    `GAME OVER\n\n` +
-    `${reason}\n\n` +
-    `Final Scores:\n` +
-    `Red: ${finalRed}\n` +
-    `Blue: ${finalBlue}\n\n` +
-    `${winnerMessage}\n\n` +
-    `Remaining pieces added:\n` +
-    `Red: ${redRemaining.toFixed(2)}\n` +
-    `Blue: ${blueRemaining.toFixed(2)}`;
+    `GAME OVER
+` +
+    `${reason}
+` +
+    `Final Scores:
+` +
+    `Red: ${finalRed}
+` +
+    `Blue: ${finalBlue}
+` +
+    `${winnerMessage}`;
 
-  // Show alert and log to console
   alert(finalMessage);
   console.log("Game Over:", reason);
   console.log("Final Scores - Red:", finalRed, "Blue:", finalBlue);
-  console.log(
-    "Remaining values - Red:",
-    redRemaining.toFixed(2),
-    "Blue:",
-    blueRemaining.toFixed(2)
-  );
 }
 
 function undoMove() {
   if (gameOver || replayMode || currentMoveIndex <= 0) return;
-
   currentMoveIndex--;
   restoreBoardState(moveHistoryStates[currentMoveIndex]);
-
-  // Update move history to match
   currentHistoryIndex = currentMoveIndex - 1;
   if (currentHistoryIndex < -1) currentHistoryIndex = -1;
   updateMoveHistoryDOM();
@@ -1223,23 +1377,20 @@ function redoMove() {
     gameOver ||
     replayMode ||
     currentMoveIndex >= moveHistoryStates.length - 1
-  )
+  ) {
     return;
-
+  }
   currentMoveIndex++;
   restoreBoardState(moveHistoryStates[currentMoveIndex]);
-
-  // Update move history to match
   currentHistoryIndex = currentMoveIndex - 1;
   updateMoveHistoryDOM();
 }
 
 function startReplay(speed = 1000) {
   if (moveHistoryStates.length === 0) return;
-
   replayMode = true;
   let replayIndex = 0;
-
+  clearMoveHighlights();
   replayInterval = setInterval(() => {
     if (replayIndex >= moveHistoryStates.length) {
       stopReplay();
@@ -1253,7 +1404,6 @@ function startReplay(speed = 1000) {
 function stopReplay() {
   if (replayInterval) clearInterval(replayInterval);
   replayMode = false;
-  // Restore to current game state
   if (currentMoveIndex >= 0 && currentMoveIndex < moveHistoryStates.length) {
     restoreBoardState(moveHistoryStates[currentMoveIndex]);
   }
@@ -1261,10 +1411,8 @@ function stopReplay() {
 
 function togglePieceTransparency() {
   piecesTransparent = !piecesTransparent;
-
   const toggleBtn = document.getElementById("toggle-transparency");
   const pieces = document.querySelectorAll(".piece");
-
   if (piecesTransparent) {
     pieces.forEach((piece) => piece.classList.add("transparent"));
     toggleBtn.textContent = "Hide Symbols";
@@ -1276,6 +1424,70 @@ function togglePieceTransparency() {
   }
 }
 
-// INIT
-setupDebugControls();
-placeInitialPieces();
+function clearMoveHighlights() {
+  document
+    .querySelectorAll(".square.move-from, .square.move-to")
+    .forEach((sq) => {
+      sq.classList.remove("move-from", "move-to");
+    });
+}
+
+function initializeGame() {
+  // ✅ 1. FIRST: Create the empty board structure
+  initializeBoard(); // This populates #gameboard with .square elements
+
+  // ✅ 2. THEN: Set up UI state
+  const currentPlayerLabel = document.querySelector(".current-player-label");
+  if (currentPlayerLabel) {
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
+
+  // ✅ 3. FINALLY: Reset game state (which places pieces on existing board)
+  resetGame();
+
+  // Setup controls after board exists
+  setupDebugControls();
+}
+
+// ================== INITIALIZATION ==================
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    // ✅ ENSURE FULL DOM READY
+    if (gameboard) {
+      const currentPlayerLabel = document.querySelector(
+        ".current-player-label"
+      );
+      if (currentPlayerLabel) {
+        currentPlayerLabel.setAttribute("data-player", currentPlayer);
+      }
+      initializeGame();
+    } else {
+      console.warn("Gameboard not found.");
+    }
+  }, 0);
+});
+
+// =============== TOGGLE CONTROLS SIDEBAR ===============
+document.addEventListener("DOMContentLoaded", () => {
+  const toggleBtn = document.getElementById("toggle-controls");
+  const sidebar = document.querySelector(".controls-sidebar");
+  if (!toggleBtn || !sidebar) return;
+  const isCollapsed =
+    localStorage.getItem("controlsSidebarCollapsed") === "true";
+  if (isCollapsed) sidebar.classList.add("collapsed");
+  toggleBtn.addEventListener("click", () => {
+    sidebar.classList.toggle("collapsed");
+    const isNowCollapsed = sidebar.classList.contains("collapsed");
+    toggleBtn.setAttribute("aria-expanded", !isNowCollapsed);
+    localStorage.setItem("controlsSidebarCollapsed", isNowCollapsed);
+  });
+});
+
+// Export for testing
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    calculateSciDamathScore,
+    isValidMove,
+    playerHasMandatoryCapture,
+  };
+}
