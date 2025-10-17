@@ -921,6 +921,11 @@ function clearValidMoves() {
 
 // ================== INPUT HANDLERS ==================
 gameboard.addEventListener("click", (e) => {
+  // Prevent player interaction during AI turn in PvAI mode
+  if (gameMode === 'pvai' && currentPlayer === 'blue') {
+    return;
+  }
+  
   const piece = e.target.closest(".piece");
   const square = e.target.closest(".square");
   if (!square || !square.classList.contains("playable")) return;
@@ -950,6 +955,12 @@ gameboard.addEventListener("click", (e) => {
 });
 
 gameboard.addEventListener("dragstart", (e) => {
+  // Prevent player interaction during AI turn in PvAI mode
+  if (gameMode === 'pvai' && currentPlayer === 'blue') {
+    e.preventDefault();
+    return;
+  }
+  
   const piece = e.target.closest(".piece");
   if (!piece || !piece.classList.contains(currentPlayer)) {
     e.preventDefault();
@@ -991,6 +1002,12 @@ gameboard.addEventListener("dragover", (e) => {
 
 gameboard.addEventListener("drop", (e) => {
   e.preventDefault();
+  // Prevent player interaction during AI turn in PvAI mode
+  if (gameMode === 'pvai' && currentPlayer === 'blue') {
+    cleanupDrag();
+    return;
+  }
+  
   const square = e.target.closest(".square");
   if (!square || !square.classList.contains("playable") || !selectedPiece) {
     cleanupDrag();
