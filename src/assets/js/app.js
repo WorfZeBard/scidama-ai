@@ -262,46 +262,91 @@ function switchTurn() {
   }
 }
 
-// Simple AI move function (placeholder)
+// Simple AI move function with multi-capture capability
 function makeAIMove() {
   if (gameOver || currentPlayer !== "blue") return;
-  
-  // Get all blue pieces
+
+  // 🔒 Respect ongoing capture chain
+  if (mustCaptureWithPiece && mustCaptureWithPiece.classList.contains("blue")) {
+    setTimeout(() => handleMultiCapture(mustCaptureWithPiece), 300);
+    return;
+  }
+
   const bluePieces = Array.from(document.querySelectorAll(".piece.blue"));
-  
-  // Find valid moves for each piece
   let validMoves = [];
+
   for (const piece of bluePieces) {
     const sq = piece.parentElement;
-    const startRow = parseInt(sq.dataset.row);
-    const startCol = parseInt(sq.dataset.col);
-    
+    const startRow = parseInt(sq.dataset.row, 10);
+    const startCol = parseInt(sq.dataset.col, 10);
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
         if (isValidMove(piece, startRow, startCol, r, c)) {
+          const isCap = isCaptureMove(piece, startRow, startCol, r, c);
           validMoves.push({
-            piece: piece,
-            startRow: startRow,
-            startCol: startCol,
+            piece,
+            startRow,
+            startCol,
             endRow: r,
-            endCol: c
+            endCol: c,
+            type: isCap ? "capture" : "move"
           });
         }
       }
     }
   }
-  
-  if (validMoves.length > 0) {
-    // Choose a random valid move (simple AI)
-    const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+
+  const captureMoves = validMoves.filter(m => m.type === "capture");
+  const movePool = captureMoves.length > 0 ? captureMoves : validMoves;
+
+  if (movePool.length > 0) {
+    const chosenMove = movePool[Math.floor(Math.random() * movePool.length)];
     performMove(
-      randomMove.piece,
-      randomMove.startRow,
-      randomMove.startCol,
-      randomMove.endRow,
-      randomMove.endCol
+      chosenMove.piece,
+      chosenMove.startRow,
+      chosenMove.startCol,
+      chosenMove.endRow,
+      chosenMove.endCol
     );
+
+    if (chosenMove.type === "capture" && !gameOver) {
+      if (mustCaptureWithPiece === chosenMove.piece) {
+        setTimeout(() => handleMultiCapture(chosenMove.piece), 300);
+      }
+    }
+  } else {
+    switchTurn();
   }
+}
+
+// Handles chained captures
+function handleMultiCapture(piece) {
+  if (!piece || gameOver || piece.parentElement === null) return;
+
+  const sq = piece.parentElement;
+  const startRow = parseInt(sq.dataset.row, 10);
+  const startCol = parseInt(sq.dataset.col, 10);
+  let additionalCaptures = [];
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (isValidMove(piece, startRow, startCol, r, c)) {
+        if (isCaptureMove(piece, startRow, startCol, r, c)) {
+          additionalCaptures.push({ r, c });
+        }
+      }
+    }
+  }
+
+  if (additionalCaptures.length > 0) {
+    const next = additionalCaptures[Math.floor(Math.random() * additionalCaptures.length)];
+    performMove(piece, startRow, startCol, next.r, next.c);
+    // performMove() will set mustCaptureWithPiece if chain continues
+    if (mustCaptureWithPiece === piece && !gameOver) {
+      setTimeout(() => handleMultiCapture(piece), 300);
+    }
+  }
+  // 🚫 Do NOT call switchTurn() here — performMove() handles it
 }
 
 function calculateFinalScores() {
@@ -845,12 +890,20 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       piece: pieceKey,
     });
   }
-  if (
+  // 🚫 Promotion ends the turn immediately — no chain capture allowed
+  if (wasPromoted) {
+    mustCaptureWithPiece = null;
+    switchTurn();
+  }
+  // 🔁 Otherwise, allow chain capture only if a capture occurred AND chain is possible
+  else if (
     capturedPieces.length > 0 &&
     checkForChainCapture(piece, endRow, endCol)
   ) {
     mustCaptureWithPiece = piece;
-  } else {
+  }
+  // 🛑 No promotion and no chain? End turn.
+  else {
     mustCaptureWithPiece = null;
     switchTurn();
   }
