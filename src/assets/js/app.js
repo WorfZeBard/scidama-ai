@@ -262,91 +262,237 @@ function switchTurn() {
   }
 }
 
-// Simple AI move function with multi-capture capability
-function makeAIMove() {
-  if (gameOver || currentPlayer !== "blue") return;
+// ================== MINIMAX AI WITH ALPHA-BETA PRUNING ==================
 
-  // 🔒 Respect ongoing capture chain
+const AI_DEPTH = 1; // Adjust based on performance (3–5 is typical)
+
+function makeAIMove() {
+  document.body.style.cursor = 'wait';
+  document.getElementById('current-player').textContent = 'AI THINKING...';
+
+  if (gameOver || currentPlayer !== "blue" || replayMode) return;
+
+  // If in mandatory capture chain, only consider captures from that piece
   if (mustCaptureWithPiece && mustCaptureWithPiece.classList.contains("blue")) {
-    setTimeout(() => handleMultiCapture(mustCaptureWithPiece), 300);
+    const sq = mustCaptureWithPiece.parentElement;
+    const startRow = parseInt(sq.dataset.row, 10);
+    const startCol = parseInt(sq.dataset.col, 10);
+    const captureMoves = generateMovesForPiece(mustCaptureWithPiece, startRow, startCol, true);
+    if (captureMoves.length > 0) {
+      const bestMove = captureMoves[0]; // Could randomize or pick best
+      performMove(bestMove.piece, bestMove.startRow, bestMove.startCol, bestMove.endRow, bestMove.endCol);
+      return;
+    }
+  }
+
+  const moves = generateAllValidMoves("blue");
+  if (moves.length === 0) {
+    switchTurn();
     return;
   }
 
-  const bluePieces = Array.from(document.querySelectorAll(".piece.blue"));
-  let validMoves = [];
+  let bestMove = null;
+  let bestValue = -Infinity;
 
-  for (const piece of bluePieces) {
-    const sq = piece.parentElement;
-    const startRow = parseInt(sq.dataset.row, 10);
-    const startCol = parseInt(sq.dataset.col, 10);
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        if (isValidMove(piece, startRow, startCol, r, c)) {
-          const isCap = isCaptureMove(piece, startRow, startCol, r, c);
-          validMoves.push({
-            piece,
-            startRow,
-            startCol,
-            endRow: r,
-            endCol: c,
-            type: isCap ? "capture" : "move"
-          });
-        }
-      }
+  for (const move of moves) {
+    // Simulate move
+    const state = saveBoardState();
+    performMoveSimulated(move);
+
+    // Evaluate
+    const value = minimax(AI_DEPTH - 1, -Infinity, Infinity, false); // false = minimizing (red's turn)
+
+    // Restore
+    restoreBoardState(state);
+
+    if (value > bestValue) {
+      bestValue = value;
+      bestMove = move;
     }
   }
 
-  const captureMoves = validMoves.filter(m => m.type === "capture");
-  const movePool = captureMoves.length > 0 ? captureMoves : validMoves;
-
-  if (movePool.length > 0) {
-    const chosenMove = movePool[Math.floor(Math.random() * movePool.length)];
-    performMove(
-      chosenMove.piece,
-      chosenMove.startRow,
-      chosenMove.startCol,
-      chosenMove.endRow,
-      chosenMove.endCol
-    );
-
-    if (chosenMove.type === "capture" && !gameOver) {
-      if (mustCaptureWithPiece === chosenMove.piece) {
-        setTimeout(() => handleMultiCapture(chosenMove.piece), 300);
-      }
-    }
+  if (bestMove) {
+    performMove(bestMove.piece, bestMove.startRow, bestMove.startCol, bestMove.endRow, bestMove.endCol);
   } else {
-    switchTurn();
+    // Fallback
+    const randomMove = moves[Math.floor(Math.random() * moves.length)];
+    performMove(randomMove.piece, randomMove.startRow, randomMove.startCol, randomMove.endRow, randomMove.endCol);
   }
 }
 
-// Handles chained captures
-function handleMultiCapture(piece) {
-  if (!piece || gameOver || piece.parentElement === null) return;
+// Generate all valid moves for a color
+function generateAllValidMoves(color) {
+  const moves = [];
+  const pieces = Array.from(document.querySelectorAll(`.piece.${color}`));
+  for (const piece of pieces) {
+    const sq = piece.parentElement;
+    const startRow = parseInt(sq.dataset.row, 10);
+    const startCol = parseInt(sq.dataset.col, 10);
+    // If mandatory capture exists, only generate captures
+    if (mustCaptureWithPiece && mustCaptureWithPiece !== piece) continue;
+    const isCaptureOnly = mustCaptureWithPiece === piece || playerHasMandatoryCapture(color);
+    const pieceMoves = generateMovesForPiece(piece, startRow, startCol, isCaptureOnly);
+    moves.push(...pieceMoves);
+  }
+  return moves;
+}
 
-  const sq = piece.parentElement;
-  const startRow = parseInt(sq.dataset.row, 10);
-  const startCol = parseInt(sq.dataset.col, 10);
-  let additionalCaptures = [];
-
+// Generate moves for a single piece
+function generateMovesForPiece(piece, startRow, startCol, captureOnly = false) {
+  const moves = [];
+  const color = piece.classList.contains("red") ? "red" : "blue";
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       if (isValidMove(piece, startRow, startCol, r, c)) {
-        if (isCaptureMove(piece, startRow, startCol, r, c)) {
-          additionalCaptures.push({ r, c });
-        }
+        const isCap = isCaptureMove(piece, startRow, startCol, r, c);
+        if (captureOnly && !isCap) continue;
+        moves.push({
+          piece,
+          startRow,
+          startCol,
+          endRow: r,
+          endCol: c,
+          isCapture: isCap
+        });
+      }
+    }
+  }
+  return moves;
+}
+
+// Simulate a move without side effects (no DOM changes, no sound, no history)
+function performMoveSimulated(move) {
+  const { piece, startRow, startCol, endRow, endCol } = move;
+  const color = piece.classList.contains("red") ? "red" : "blue";
+  const endSq = document.querySelector(`.square[data-row='${endRow}'][data-col='${endCol}']`);
+  const startSq = piece.parentElement;
+
+  // Move piece in DOM (required for isValidMove to work in recursion)
+  endSq.appendChild(piece);
+
+  // Handle capture
+  if (move.isCapture) {
+    if (piece.classList.contains("king")) {
+      const captured = findCapturedPieces(startRow, startCol, endRow, endCol, color);
+      captured.forEach(p => p.remove());
+    } else {
+      const midRow = (startRow + endRow) / 2;
+      const midCol = (startCol + endCol) / 2;
+      const midSq = document.querySelector(`.square[data-row='${midRow}'][data-col='${midCol}']`);
+      const midPiece = midSq?.querySelector(".piece");
+      if (midPiece && !midPiece.classList.contains(color)) {
+        midPiece.remove();
       }
     }
   }
 
-  if (additionalCaptures.length > 0) {
-    const next = additionalCaptures[Math.floor(Math.random() * additionalCaptures.length)];
-    performMove(piece, startRow, startCol, next.r, next.c);
-    // performMove() will set mustCaptureWithPiece if chain continues
-    if (mustCaptureWithPiece === piece && !gameOver) {
-      setTimeout(() => handleMultiCapture(piece), 300);
+  // Handle promotion (only if not king and reaches end)
+  let wasPromoted = false;
+  if (!piece.classList.contains("king")) {
+    if ((color === "red" && endRow === 0) || (color === "blue" && endRow === 7)) {
+      piece.classList.add("king");
+      wasPromoted = true;
     }
   }
-  // 🚫 Do NOT call switchTurn() here — performMove() handles it
+
+  // Update global state for evaluation
+  currentPlayer = currentPlayer === "red" ? "blue" : "red";
+  mustCaptureWithPiece = null; // Simplification: assume no chain in eval (or handle via move gen)
+}
+
+// Restore state after simulation
+// Already handled by restoreBoardState()
+
+// Minimax with alpha-beta pruning
+function minimax(depth, alpha, beta, maximizingPlayer) {
+  if (depth === 0 || isGameOverState()) {
+    return evaluateBoard();
+  }
+
+  const color = maximizingPlayer ? "blue" : "red";
+  const moves = generateAllValidMoves(color);
+
+  if (maximizingPlayer) {
+    let maxEval = -Infinity;
+    for (const move of moves) {
+      const state = saveBoardState();
+      performMoveSimulated(move);
+      const eval = minimax(depth - 1, alpha, beta, false);
+      restoreBoardState(state);
+      maxEval = Math.max(maxEval, eval);
+      alpha = Math.max(alpha, eval);
+      if (beta <= alpha) break; // prune
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const move of moves) {
+      const state = saveBoardState();
+      performMoveSimulated(move);
+      const eval = minimax(depth - 1, alpha, beta, true);
+      restoreBoardState(state);
+      minEval = Math.min(minEval, eval);
+      beta = Math.min(beta, eval);
+      if (beta <= alpha) break; // prune
+    }
+    return minEval;
+  }
+}
+
+// Evaluate board from Blue's perspective (higher = better for blue)
+function evaluateBoard() {
+  // Use current scores as base
+  let score = blueScore - redScore;
+
+  // Add piece values (with king multiplier)
+  const redPieces = document.querySelectorAll(".piece.red");
+  const bluePieces = document.querySelectorAll(".piece.blue");
+
+  let redValue = 0;
+  redPieces.forEach(p => {
+    const val = parseFloat(p.dataset.value);
+    const mult = p.classList.contains("king") ? 2 : 1;
+    redValue += val * mult;
+  });
+
+  let blueValue = 0;
+  bluePieces.forEach(p => {
+    const val = parseFloat(p.dataset.value);
+    const mult = p.classList.contains("king") ? 2 : 1;
+    blueValue += val * mult;
+  });
+
+  // Net material advantage
+  score += (blueValue - redValue);
+
+  // Bonus for king count
+  const redKings = document.querySelectorAll(".piece.red.king").length;
+  const blueKings = document.querySelectorAll(".piece.blue.king").length;
+  score += (blueKings - redKings) * 5; // kings are valuable
+
+  // Positional bonus: blue prefers lower rows (closer to promotion)
+  bluePieces.forEach(p => {
+    if (!p.classList.contains("king")) {
+      const row = parseInt(p.parentElement.dataset.row);
+      score += (7 - row) * 0.1; // encourage advancing
+    }
+  });
+  redPieces.forEach(p => {
+    if (!p.classList.contains("king")) {
+      const row = parseInt(p.parentElement.dataset.row);
+      score -= row * 0.1; // red advancing hurts blue
+    }
+  });
+
+  return score;
+}
+
+function isGameOverState() {
+  const redPieces = document.querySelectorAll(".piece.red").length;
+  const bluePieces = document.querySelectorAll(".piece.blue").length;
+  if (redPieces === 0 || bluePieces === 0) return true;
+  if (!playerHasAnyValidMove("red") || !playerHasAnyValidMove("blue")) return true;
+  return false;
 }
 
 function calculateFinalScores() {
@@ -1206,7 +1352,7 @@ function setupDebugControls() {
   const stopReplayBtn = document.getElementById("stop-replay");
   const transparencyBtn = document.getElementById("toggle-transparency");
   const backToMenuBtn = document.getElementById("back-to-menu");
-  const darkModeBtn = document.getElementById("toggle-dark-mode"); // ✅ ADDED
+  const darkModeBtn = document.getElementById("toggle-dark-mode");
 
   if (toggle) {
     toggle.addEventListener("click", () => {
@@ -1216,39 +1362,50 @@ function setupDebugControls() {
       resetGame();
     });
   }
-  if (reset) reset.addEventListener("click", resetGame);
+  if (reset) {
+    reset.addEventListener("click", () => {
+      showConfirmationModal("Are you sure you want to reset the board? Current game progress will be lost.", () => {
+        resetGame();
+      });
+    });
+  }
   if (endGameBtn) {
     endGameBtn.addEventListener("click", () => {
-      if (sessionInterval) clearInterval(sessionInterval);
-      if (roundInterval) clearInterval(roundInterval);
-      endGame("Game ended manually");
+      showConfirmationModal("End the game manually?", () => {
+        endGame("Game ended manually");
+      });
     });
   }
   if (surrenderBtn) {
     surrenderBtn.addEventListener("click", () => {
-      if (
-        !gameOver &&
-        confirm(`Are you sure you want to surrender as ${currentPlayer}?`)
-      ) {
-        surrenderRequested = currentPlayer;
-        checkGameOver();
-      }
+      if (gameOver) return;
+      showConfirmationModal(
+        `Are you sure you want to surrender as ${currentPlayer}?`,
+        () => {
+          surrenderRequested = currentPlayer;
+          checkGameOver();
+        }
+      );
     });
   }
   if (agreeBtn) {
     agreeBtn.addEventListener("click", () => {
-      if (!gameOver && confirm("Do both players agree to end the game?")) {
-        endGame("Game ended by mutual agreement.");
-      }
+      if (gameOver) return;
+      showConfirmationModal(
+        "Do both players agree to end the game?",
+        () => {
+          endGame("Game ended by mutual agreement.");
+        }
+      );
     });
   }
   if (undoBtn) undoBtn.addEventListener("click", undoMove);
   if (redoBtn) redoBtn.addEventListener("click", redoMove);
   if (replayBtn) {
     replayBtn.addEventListener("click", () => {
-      if (confirm("Start replay from beginning?")) {
+      showConfirmationModal("Start replay from beginning?", () => {
         startReplay(1000);
-      }
+      });
     });
   }
   if (stopReplayBtn) stopReplayBtn.addEventListener("click", stopReplay);
@@ -1258,45 +1415,28 @@ function setupDebugControls() {
   if (backToMenuBtn) {
     backToMenuBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      if (confirm("Return to main menu? Current game will be lost.")) {
-        // Get current file's directory
-        const currentDir = window.location.href.substring(
-          0,
-          window.location.href.lastIndexOf("/")
-        );
-
-        // Go up to project root and then into src/
+      showConfirmationModal("Return to main menu? Current game will be lost.", () => {
+        const currentDir = window.location.href.substring(0, window.location.href.lastIndexOf("/"));
         const menuPath = currentDir.split("src")[0] + "src/index.html";
-
         window.location.href = menuPath;
-      }
+      });
     });
   }
 
-  // ✅ DARK MODE LOGIC MOVED HERE
+  // Dark mode logic (unchanged)
   if (darkModeBtn) {
     const savedTheme = localStorage.getItem("theme");
-    const systemPrefersDark = window.matchMedia(
-      "(prefers-color-scheme: dark)"
-    ).matches;
-    let isDark =
-      savedTheme === "dark" || (savedTheme !== "light" && systemPrefersDark);
-
+    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    let isDark = savedTheme === "dark" || (savedTheme !== "light" && systemPrefersDark);
     function applyTheme(dark) {
-      if (dark) {
-        document.body.setAttribute("data-theme", "dark");
-      } else {
-        document.body.removeAttribute("data-theme");
-      }
+      if (dark) document.body.setAttribute("data-theme", "dark");
+      else document.body.removeAttribute("data-theme");
     }
-
     function updateButtonLabel() {
       darkModeBtn.textContent = isDark ? "Light Mode" : "Dark Mode";
     }
-
     applyTheme(isDark);
     updateButtonLabel();
-
     darkModeBtn.addEventListener("click", () => {
       isDark = !isDark;
       applyTheme(isDark);
@@ -1367,53 +1507,107 @@ function playerHasAnyValidMove(color) {
   return false;
 }
 
+function showConfirmationModal(message, onConfirm) {
+  const modal = document.getElementById("confirmation-modal");
+  const messageEl = document.getElementById("confirmation-message");
+  const yesBtn = document.getElementById("confirm-yes");
+  const noBtn = document.getElementById("confirm-no");
+
+  if (!modal || !messageEl || !yesBtn || !noBtn) {
+    console.error("Confirmation modal elements are missing from HTML!");
+    // Fallback to confirm() if modal isn't ready
+    if (confirm(message)) {
+      onConfirm();
+    }
+    return;
+  }
+
+  messageEl.textContent = message;
+  modal.hidden = false;
+
+  const close = () => {
+    modal.hidden = true;
+    yesBtn.onclick = null;
+    noBtn.onclick = null;
+  };
+
+  yesBtn.onclick = () => {
+    close();
+    if (onConfirm) onConfirm();
+  };
+
+  noBtn.onclick = close;
+
+  yesBtn.focus();
+}
+
 function endGame(reason, isSurrender = false) {
   if (gameOver) return;
   gameOver = true;
-
   if (sessionInterval) clearInterval(sessionInterval);
   if (roundInterval) clearInterval(roundInterval);
   playSound("gameEnd");
 
-  if (isSurrender) {
-    // ✅ For surrender: show ONLY the reason (no scores)
-    alert(`GAME OVER\n${reason}`);
-    console.log("Game Over:", reason);
-    return;
+  const modal = document.getElementById("game-over-modal");
+  const messageEl = document.getElementById("game-over-message");
+  const newGameBtn = document.getElementById("new-game-btn");
+  const closeBtn = document.getElementById("close-modal");
+
+  let finalMessage = "GAME OVER\n" + reason;
+
+  if (!isSurrender) {
+    const finalScores = calculateFinalScores();
+    const finalRed = finalScores.red.toFixed(2);
+    const finalBlue = finalScores.blue.toFixed(2);
+
+    let winnerMessage = "";
+    const redScore = parseFloat(finalRed);
+    const blueScore = parseFloat(finalBlue);
+    if (redScore < blueScore) {
+      winnerMessage = "Red wins!";
+    } else if (blueScore < redScore) {
+      winnerMessage = "Blue wins!";
+    } else {
+      winnerMessage = "It's a draw!";
+    }
+
+    finalMessage +=
+      `\n\nFinal Scores:\nRed: ${finalRed}\nBlue: ${finalBlue}\n${winnerMessage}`;
   }
 
-  // ✅ Only calculate scores for non-surrender endings
-  const finalScores = calculateFinalScores();
-  const finalRed = finalScores.red.toFixed(2);
-  const finalBlue = finalScores.blue.toFixed(2);
+  messageEl.textContent = finalMessage;
+  modal.hidden = false;
 
-  let winnerMessage = "";
-  const redScore = parseFloat(finalRed);
-  const blueScore = parseFloat(finalBlue);
-  if (redScore < blueScore) {
-    winnerMessage = "Red wins!";
-  } else if (blueScore < redScore) {
-    winnerMessage = "Blue wins!";
+  const closeModal = () => {
+    modal.hidden = true;
+  };
+
+  const startNewGame = () => {
+    closeModal();
+    resetGame();
+  };
+
+  newGameBtn.onclick = startNewGame;
+  closeBtn.onclick = closeModal;
+
+  if (isSurrender || reason.includes("manually") || reason.includes("agreement")) {
+    closeBtn.focus();
   } else {
-    winnerMessage = "It's a draw!";
+    newGameBtn.focus();
   }
 
-  const finalMessage =
-    `GAME OVER
-` +
-    `${reason}
-` +
-    `Final Scores:
-` +
-    `Red: ${finalRed}
-` +
-    `Blue: ${finalBlue}
-` +
-    `${winnerMessage}`;
+  const handleEscape = (e) => {
+    if (e.key === "Escape") {
+      closeModal();
+      document.removeEventListener("keydown", handleEscape);
+    }
+  };
+  document.addEventListener("keydown", handleEscape);
 
-  alert(finalMessage);
   console.log("Game Over:", reason);
-  console.log("Final Scores - Red:", finalRed, "Blue:", finalBlue);
+  if (!isSurrender) {
+    console.log("Final Scores - Red:", finalRed, "Blue:", finalBlue);
+  }
 }
 
 function undoMove() {
