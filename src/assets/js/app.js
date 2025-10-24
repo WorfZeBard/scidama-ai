@@ -25,6 +25,13 @@ let replayMode = false;
 let replayInterval = null;
 let gameOver = false;
 let piecesTransparent = false;
+let aiDepth = 1; // Default depth
+
+const savedDifficulty = localStorage.getItem('aiDifficulty');
+
+if (savedDifficulty && [1,2,3,4].includes(parseInt(savedDifficulty))) {
+  aiDepth = parseInt(savedDifficulty);
+}
 
 // src/assets/js/app.js
 
@@ -92,6 +99,175 @@ let DEBUG_SETUP = {
 
 const sessionEl = document.getElementById("session-time");
 const roundEl = document.getElementById("round-time");
+
+// ================== UNIFIED GAME LOGIC (DOM-FREE) ==================
+
+const DIRECTIONS = {
+  red: [[-1, -1], [-1, 1]],
+  blue: [[1, -1], [1, 1]],
+  king: [[-1, -1], [-1, 1], [1, -1], [1, 1]]
+};
+
+// Convert DOM board to logical state
+function createLogicalBoard() {
+  const board = Array(8).fill().map(() => Array(8).fill(null));
+  document.querySelectorAll('.piece').forEach(el => {
+    const sq = el.parentElement;
+    const r = parseInt(sq.dataset.row, 10);
+    const c = parseInt(sq.dataset.col, 10);
+    const color = el.classList.contains('red') ? 'red' : 'blue';
+    const isKing = el.classList.contains('king');
+    const value = parseFloat(el.dataset.value);
+    board[r][c] = { color, value, isKing };
+  });
+  return board;
+}
+
+// Apply move to logical board (returns new board)
+function applyLogicalMove(board, move) {
+  const newBoard = board.map(row => [...row]);
+  const { startRow, startCol, endRow, endCol, captured = [] } = move;
+
+  // Move piece
+  newBoard[endRow][endCol] = newBoard[startRow][startCol];
+  newBoard[startRow][startCol] = null;
+
+  // Remove captured pieces
+  for (const [r, c] of captured) {
+    newBoard[r][c] = null;
+  }
+
+  // Promote if needed
+  const piece = newBoard[endRow][endCol];
+  if (piece && !piece.isKing) {
+    if ((piece.color === 'red' && endRow === 0) || (piece.color === 'blue' && endRow === 7)) {
+      newBoard[endRow][endCol] = { ...piece, isKing: true };
+    }
+  }
+
+  return newBoard;
+}
+
+// Generate all capture moves for a player
+function generateAllCaptureMoves(board, color) {
+  const moves = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const piece = board[r][c];
+      if (piece && piece.color === color) {
+        const immediate = getImmediateCaptures(board, r, c, piece);
+        moves.push(...immediate);
+      }
+    }
+  }
+  return moves;
+}
+
+// Generate all non-capture moves
+function generateAllNonCaptureMoves(board, color) {
+  const moves = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const piece = board[r][c];
+      if (!piece || piece.color !== color) continue;
+      const dirs = piece.isKing ? DIRECTIONS.king : DIRECTIONS[color];
+      for (const [dr, dc] of dirs) {
+        let endR = r + dr;
+        let endC = c + dc;
+        if (piece.isKing) {
+          // 👑 KING: slide any distance
+          while (endR >= 0 && endR < 8 && endC >= 0 && endC < 8) {
+            if (board[endR][endC]) break;
+            moves.push({ startRow: r, startCol: c, endRow: endR, endCol: endC, isCapture: false });
+            endR += dr;
+            endC += dc;
+          }
+        } else {
+          // 🔒 NON-KING: single step only
+          if (endR >= 0 && endR < 8 && endC >= 0 && endC < 8 && !board[endR][endC]) {
+            moves.push({ startRow: r, startCol: c, endRow: endR, endCol: endC, isCapture: false });
+          }
+        }
+      }
+    }
+  }
+  return moves;
+}
+
+// Main move generator
+function generateAllMoves(board, color) {
+  const captures = generateAllCaptureMoves(board, color);
+  if (captures.length > 0) {
+    return captures;
+  }
+  return generateAllNonCaptureMoves(board, color);
+}
+
+// Evaluate board for minimax
+function evaluateBoardState(board, redScore, blueScore) {
+  let redPieceValue = 0;
+  let bluePieceValue = 0;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (!p) continue;
+      const mult = p.isKing ? 2 : 1;
+      if (p.color === 'red') redPieceValue += p.value * mult;
+      else bluePieceValue += p.value * mult;
+    }
+  }
+  const totalRed = redScore + redPieceValue;
+  const totalBlue = blueScore + bluePieceValue;
+  return totalBlue - totalRed; // Blue wants this LOW
+}
+
+// Minimax with alpha-beta
+function minimax(board, depth, alpha, beta, maximizingPlayer, redScore, blueScore) {
+  if (depth === 0) {
+    return evaluateBoardState(board, redScore, blueScore);
+  }
+
+  const color = maximizingPlayer ? 'blue' : 'red';
+  const moves = generateAllMoves(board, color);
+
+  if (maximizingPlayer) {
+    let maxEval = -Infinity;
+    for (const move of moves) {
+      const newBoard = applyLogicalMove(board, move);
+      const eval = minimax(newBoard, depth - 1, alpha, beta, false, redScore, blueScore);
+      maxEval = Math.max(maxEval, eval);
+      alpha = Math.max(alpha, eval);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const move of moves) {
+      const newBoard = applyLogicalMove(board, move);
+      const eval = minimax(newBoard, depth - 1, alpha, beta, true, redScore, blueScore);
+      minEval = Math.min(minEval, eval);
+      beta = Math.min(beta, eval);
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  }
+}
+
+// Map logical move back to DOM piece
+function findPieceInDOM(startRow, startCol) {
+  const sq = document.querySelector(`.square[data-row='${startRow}'][data-col='${startCol}']`);
+  return sq ? sq.querySelector('.piece') : null;
+}
+
+// Execute logical move in DOM
+function executeLogicalMove(move) {
+  const piece = findPieceInDOM(move.startRow, move.startCol);
+  if (!piece) {
+    console.error("Piece not found for move:", move);
+    return;
+  }
+  performMove(piece, move.startRow, move.startCol, move.endRow, move.endCol);
+}
 
 // ================== PIECES ==================
 const PIECES = {
@@ -241,6 +417,7 @@ function highlightMoveSquares(startRow, startCol, endRow, endCol) {
 }
 
 function switchTurn() {
+  mustCaptureWithPiece = null; // 👈 Prevent lockup
   currentPlayer = currentPlayer === "red" ? "blue" : "red";
   currentPlayerEl.textContent = currentPlayer;
   const currentPlayerLabel = document.querySelector(".current-player-label");
@@ -258,241 +435,136 @@ function switchTurn() {
   if (gameMode === "pvai" && currentPlayer === "blue") {
     setTimeout(() => {
       makeAIMove();
-    }, 1000);
+    }, 500);
   }
 }
 
 // ================== MINIMAX AI WITH ALPHA-BETA PRUNING ==================
-
-const AI_DEPTH = 1; // Adjust based on performance (3–5 is typical)
-
 function makeAIMove() {
-  document.body.style.cursor = 'wait';
-  document.getElementById('current-player').textContent = 'AI THINKING...';
-
   if (gameOver || currentPlayer !== "blue" || replayMode) return;
-
-  // If in mandatory capture chain, only consider captures from that piece
-  if (mustCaptureWithPiece && mustCaptureWithPiece.classList.contains("blue")) {
+  const board = createLogicalBoard();
+  const color = "blue";
+  // Handle forced capture chain
+  if (mustCaptureWithPiece) {
     const sq = mustCaptureWithPiece.parentElement;
     const startRow = parseInt(sq.dataset.row, 10);
     const startCol = parseInt(sq.dataset.col, 10);
-    const captureMoves = generateMovesForPiece(mustCaptureWithPiece, startRow, startCol, true);
-    if (captureMoves.length > 0) {
-      const bestMove = captureMoves[0]; // Could randomize or pick best
-      performMove(bestMove.piece, bestMove.startRow, bestMove.startCol, bestMove.endRow, bestMove.endCol);
-      return;
+    const piece = board[startRow][startCol];
+    if (piece && piece.color === color) {
+      const captureMoves = getImmediateCaptures(board, startRow, startCol, piece); // ✅ NEW
+      if (captureMoves.length > 0) {
+        const chosen = captureMoves[0]; // or pick best
+        executeLogicalMove(chosen);
+        return;
+      }
     }
   }
-
-  const moves = generateAllValidMoves("blue");
+  const moves = generateAllMoves(board, color);
   if (moves.length === 0) {
     switchTurn();
     return;
   }
-
-  let bestMove = null;
-  let bestValue = -Infinity;
-
+  if (aiDepth === 1) {
+    const chosen = moves[0]; // already prioritizes captures
+    executeLogicalMove(chosen);
+    return;
+  }
+  // Blue is minimizing: we want the move with the LOWEST evaluation
+  let bestMove = moves[0];
+  let bestValue = Infinity; // ← was -Infinity
   for (const move of moves) {
-    // Simulate move
-    const state = saveBoardState();
-    performMoveSimulated(move);
-
-    // Evaluate
-    const value = minimax(AI_DEPTH - 1, -Infinity, Infinity, false); // false = minimizing (red's turn)
-
-    // Restore
-    restoreBoardState(state);
-
-    if (value > bestValue) {
+    const newBoard = applyLogicalMove(board, move);
+    // After Blue moves, it's Red's turn → maximizingPlayer = true
+    const value = minimax(newBoard, aiDepth - 1, -Infinity, Infinity, true, redScore, blueScore);
+    if (value < bestValue) { // ← minimize
       bestValue = value;
       bestMove = move;
     }
   }
-
-  if (bestMove) {
-    performMove(bestMove.piece, bestMove.startRow, bestMove.startCol, bestMove.endRow, bestMove.endCol);
-  } else {
-    // Fallback
-    const randomMove = moves[Math.floor(Math.random() * moves.length)];
-    performMove(randomMove.piece, randomMove.startRow, randomMove.startCol, randomMove.endRow, randomMove.endCol);
-  }
+  executeLogicalMove(bestMove);
 }
 
-// Generate all valid moves for a color
-function generateAllValidMoves(color) {
-  const moves = [];
-  const pieces = Array.from(document.querySelectorAll(`.piece.${color}`));
-  for (const piece of pieces) {
-    const sq = piece.parentElement;
-    const startRow = parseInt(sq.dataset.row, 10);
-    const startCol = parseInt(sq.dataset.col, 10);
-    // If mandatory capture exists, only generate captures
-    if (mustCaptureWithPiece && mustCaptureWithPiece !== piece) continue;
-    const isCaptureOnly = mustCaptureWithPiece === piece || playerHasMandatoryCapture(color);
-    const pieceMoves = generateMovesForPiece(piece, startRow, startCol, isCaptureOnly);
-    moves.push(...pieceMoves);
-  }
-  return moves;
-}
+// Returns only 1-step capture moves from (r, c)
+// Returns only ONE jump (not full chains) — suitable for step-by-step execution
+function getImmediateCaptures(board, r, c, piece) {
+  const captures = [];
+  const color = piece.color;
+  const isKing = piece.isKing;
+  const dirs = DIRECTIONS.king; // All 4 diagonal directions
 
-// Generate moves for a single piece
-function generateMovesForPiece(piece, startRow, startCol, captureOnly = false) {
-  const moves = [];
-  const color = piece.classList.contains("red") ? "red" : "blue";
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      if (isValidMove(piece, startRow, startCol, r, c)) {
-        const isCap = isCaptureMove(piece, startRow, startCol, r, c);
-        if (captureOnly && !isCap) continue;
-        moves.push({
-          piece,
-          startRow,
-          startCol,
-          endRow: r,
-          endCol: c,
-          isCapture: isCap
+  for (const [dr, dc] of dirs) {
+    if (isKing) {
+      // 👑 INTERNATIONAL-STYLE FLYING KING
+      // Step 1: Find the FIRST enemy piece in this direction
+      let nr = r + dr;
+      let nc = c + dc;
+      let enemyR = null, enemyC = null;
+
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        const target = board[nr][nc];
+        if (target) {
+          if (target.color === color) break; // blocked by own piece
+          enemyR = nr;
+          enemyC = nc;
+          break; // found first enemy → stop scanning
+        }
+        nr += dr;
+        nc += dc;
+      }
+
+      if (enemyR === null) continue; // no enemy found
+
+      // Step 2: Allow landing on ANY empty square BEYOND the enemy
+      let landR = enemyR + dr;
+      let landC = enemyC + dc;
+
+      while (landR >= 0 && landR < 8 && landC >= 0 && landC < 8) {
+        if (board[landR][landC]) break; // blocked by another piece
+
+        // Valid capture: jump over enemy and land here
+        captures.push({
+          startRow: r,
+          startCol: c,
+          endRow: landR,
+          endCol: landC,
+          captured: [[enemyR, enemyC]],
+          isCapture: true
         });
+
+        // Continue to next possible landing square (flying king)
+        landR += dr;
+        landC += dc;
       }
-    }
-  }
-  return moves;
-}
-
-// Simulate a move without side effects (no DOM changes, no sound, no history)
-function performMoveSimulated(move) {
-  const { piece, startRow, startCol, endRow, endCol } = move;
-  const color = piece.classList.contains("red") ? "red" : "blue";
-  const endSq = document.querySelector(`.square[data-row='${endRow}'][data-col='${endCol}']`);
-  const startSq = piece.parentElement;
-
-  // Move piece in DOM (required for isValidMove to work in recursion)
-  endSq.appendChild(piece);
-
-  // Handle capture
-  if (move.isCapture) {
-    if (piece.classList.contains("king")) {
-      const captured = findCapturedPieces(startRow, startCol, endRow, endCol, color);
-      captured.forEach(p => p.remove());
     } else {
-      const midRow = (startRow + endRow) / 2;
-      const midCol = (startCol + endCol) / 2;
-      const midSq = document.querySelector(`.square[data-row='${midRow}'][data-col='${midCol}']`);
-      const midPiece = midSq?.querySelector(".piece");
-      if (midPiece && !midPiece.classList.contains(color)) {
-        midPiece.remove();
-      }
+      // 🔒 NON-KING: Sci-Damath rule — 2-square jump in ANY direction (including backward)
+      const midR = r + dr;
+      const midC = c + dc;
+      const landR = midR + dr;
+      const landC = midC + dc;
+
+      // Bounds check
+      if (
+        midR < 0 || midR >= 8 || midC < 0 || midC >= 8 ||
+        landR < 0 || landR >= 8 || landC < 0 || landC >= 8
+      ) continue;
+
+      const midPiece = board[midR][midC];
+      const landPiece = board[landR][landC];
+
+      // Must have enemy in middle and empty landing
+      if (!midPiece || midPiece.color === color || landPiece) continue;
+
+      captures.push({
+        startRow: r,
+        startCol: c,
+        endRow: landR,
+        endCol: landC,
+        captured: [[midR, midC]],
+        isCapture: true
+      });
     }
   }
-
-  // Handle promotion (only if not king and reaches end)
-  let wasPromoted = false;
-  if (!piece.classList.contains("king")) {
-    if ((color === "red" && endRow === 0) || (color === "blue" && endRow === 7)) {
-      piece.classList.add("king");
-      wasPromoted = true;
-    }
-  }
-
-  // Update global state for evaluation
-  currentPlayer = currentPlayer === "red" ? "blue" : "red";
-  mustCaptureWithPiece = null; // Simplification: assume no chain in eval (or handle via move gen)
-}
-
-// Restore state after simulation
-// Already handled by restoreBoardState()
-
-// Minimax with alpha-beta pruning
-function minimax(depth, alpha, beta, maximizingPlayer) {
-  if (depth === 0 || isGameOverState()) {
-    return evaluateBoard();
-  }
-
-  const color = maximizingPlayer ? "blue" : "red";
-  const moves = generateAllValidMoves(color);
-
-  if (maximizingPlayer) {
-    let maxEval = -Infinity;
-    for (const move of moves) {
-      const state = saveBoardState();
-      performMoveSimulated(move);
-      const eval = minimax(depth - 1, alpha, beta, false);
-      restoreBoardState(state);
-      maxEval = Math.max(maxEval, eval);
-      alpha = Math.max(alpha, eval);
-      if (beta <= alpha) break; // prune
-    }
-    return maxEval;
-  } else {
-    let minEval = Infinity;
-    for (const move of moves) {
-      const state = saveBoardState();
-      performMoveSimulated(move);
-      const eval = minimax(depth - 1, alpha, beta, true);
-      restoreBoardState(state);
-      minEval = Math.min(minEval, eval);
-      beta = Math.min(beta, eval);
-      if (beta <= alpha) break; // prune
-    }
-    return minEval;
-  }
-}
-
-// Evaluate board from Blue's perspective (higher = better for blue)
-function evaluateBoard() {
-  // Use current scores as base
-  let score = blueScore - redScore;
-
-  // Add piece values (with king multiplier)
-  const redPieces = document.querySelectorAll(".piece.red");
-  const bluePieces = document.querySelectorAll(".piece.blue");
-
-  let redValue = 0;
-  redPieces.forEach(p => {
-    const val = parseFloat(p.dataset.value);
-    const mult = p.classList.contains("king") ? 2 : 1;
-    redValue += val * mult;
-  });
-
-  let blueValue = 0;
-  bluePieces.forEach(p => {
-    const val = parseFloat(p.dataset.value);
-    const mult = p.classList.contains("king") ? 2 : 1;
-    blueValue += val * mult;
-  });
-
-  // Net material advantage
-  score += (blueValue - redValue);
-
-  // Bonus for king count
-  const redKings = document.querySelectorAll(".piece.red.king").length;
-  const blueKings = document.querySelectorAll(".piece.blue.king").length;
-  score += (blueKings - redKings) * 5; // kings are valuable
-
-  // Positional bonus: blue prefers lower rows (closer to promotion)
-  bluePieces.forEach(p => {
-    if (!p.classList.contains("king")) {
-      const row = parseInt(p.parentElement.dataset.row);
-      score += (7 - row) * 0.1; // encourage advancing
-    }
-  });
-  redPieces.forEach(p => {
-    if (!p.classList.contains("king")) {
-      const row = parseInt(p.parentElement.dataset.row);
-      score -= row * 0.1; // red advancing hurts blue
-    }
-  });
-
-  return score;
-}
-
-function isGameOverState() {
-  const redPieces = document.querySelectorAll(".piece.red").length;
-  const bluePieces = document.querySelectorAll(".piece.blue").length;
-  if (redPieces === 0 || bluePieces === 0) return true;
-  if (!playerHasAnyValidMove("red") || !playerHasAnyValidMove("blue")) return true;
-  return false;
+  return captures;
 }
 
 function calculateFinalScores() {
@@ -666,194 +738,6 @@ function calculateSciDamathScore(capturingPiece, capturedPiece, operator) {
   return Number(rounded.toFixed(2));
 }
 
-// ================== BRAZILIAN + SCIDAMATH LOGIC ==================
-function playerHasMandatoryCapture(color) {
-  const pieces = document.querySelectorAll(`.piece.${color}`);
-  for (const piece of pieces) {
-    const sq = piece.parentElement;
-    const row = parseInt(sq.dataset.row, 10);
-    const col = parseInt(sq.dataset.col, 10);
-    if (hasMandatoryCapture(piece, row, col)) return true;
-  }
-  return false;
-}
-
-function hasMandatoryCapture(piece, startRow, startCol) {
-  const color = piece.classList.contains("red") ? "red" : "blue";
-  const isKing = piece.classList.contains("king");
-  if (isKing) {
-    const directions = [
-      [-1, -1],
-      [-1, 1],
-      [1, -1],
-      [1, 1],
-    ];
-    for (const [dRow, dCol] of directions) {
-      let r = startRow + dRow;
-      let c = startCol + dCol;
-      let opponentFound = false;
-      while (r >= 0 && r <= 7 && c >= 0 && c <= 7) {
-        const sq = document.querySelector(
-          `.square[data-row='${r}'][data-col='${c}']`
-        );
-        const p = sq?.querySelector(".piece");
-        if (p) {
-          if (p.classList.contains(color)) break;
-          if (opponentFound) break;
-          opponentFound = true;
-          const landR = r + dRow;
-          const landC = c + dCol;
-          if (landR >= 0 && landR <= 7 && landC >= 0 && landC <= 7) {
-            const landSq = document.querySelector(
-              `.square[data-row='${landR}'][data-col='${landC}']`
-            );
-            if (!landSq.querySelector(".piece")) return true;
-          }
-          break;
-        }
-        r += dRow;
-        c += dCol;
-      }
-    }
-  } else {
-    const directions = [
-      [-2, -2],
-      [-2, 2],
-      [2, -2],
-      [2, 2],
-    ];
-    for (const [dRow, dCol] of directions) {
-      const midRow = startRow + dRow / 2;
-      const midCol = startCol + dCol / 2;
-      const endRow = startRow + dRow;
-      const endCol = startCol + dCol;
-      if (endRow < 0 || endRow > 7 || endCol < 0 || endCol > 7) continue;
-      if (midRow < 0 || midRow > 7 || midCol < 0 || midCol > 7) continue;
-      const midSq = document.querySelector(
-        `.square[data-row='${midRow}'][data-col='${midCol}']`
-      );
-      const endSq = document.querySelector(
-        `.square[data-row='${endRow}'][data-col='${endCol}']`
-      );
-      const midPiece = midSq?.querySelector(".piece");
-      const endPiece = endSq?.querySelector(".piece");
-      if (midPiece && !midPiece.classList.contains(color) && !endPiece) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function isDiagonalPathClear(startRow, startCol, endRow, endCol, color) {
-  const dRow = endRow > startRow ? 1 : -1;
-  const dCol = endCol > startCol ? 1 : -1;
-  let r = startRow + dRow;
-  let c = startCol + dCol;
-  while (r !== endRow || c !== endCol) {
-    const sq = document.querySelector(
-      `.square[data-row='${r}'][data-col='${c}']`
-    );
-    if (sq?.querySelector(".piece")) return false;
-    r += dRow;
-    c += dCol;
-  }
-  return true;
-}
-
-function isCaptureMove(piece, startRow, startCol, endRow, endCol) {
-  const color = piece.classList.contains("red") ? "red" : "blue";
-  const isKing = piece.classList.contains("king");
-  if (isKing) {
-    if (Math.abs(endRow - startRow) !== Math.abs(endCol - startCol))
-      return false;
-    const dRow = endRow > startRow ? 1 : -1;
-    const dCol = endCol > startCol ? 1 : -1;
-    let r = startRow + dRow;
-    let c = startCol + dCol;
-    let captured = false;
-    while (r !== endRow || c !== endCol) {
-      const sq = document.querySelector(
-        `.square[data-row='${r}'][data-col='${c}']`
-      );
-      const p = sq?.querySelector(".piece");
-      if (p) {
-        if (captured || p.classList.contains(color)) return false;
-        captured = true;
-      }
-      r += dRow;
-      c += dCol;
-    }
-    return captured;
-  } else {
-    if (Math.abs(endRow - startRow) !== 2 || Math.abs(endCol - startCol) !== 2)
-      return false;
-    const endSq = document.querySelector(
-      `.square[data-row='${endRow}'][data-col='${endCol}']`
-    );
-    if (endSq?.querySelector(".piece")) return false;
-    const midRow = (startRow + endRow) / 2;
-    const midCol = (startCol + endCol) / 2;
-    const midSq = document.querySelector(
-      `.square[data-row='${midRow}'][data-col='${midCol}']`
-    );
-    const midPiece = midSq?.querySelector(".piece");
-    return midPiece && !midPiece.classList.contains(color);
-  }
-}
-
-function isValidMove(piece, startRow, startCol, endRow, endCol) {
-  const target = document.querySelector(
-    `.square[data-row='${endRow}'][data-col='${endCol}']`
-  );
-  if (
-    !target ||
-    !target.classList.contains("playable") ||
-    target.querySelector(".piece")
-  )
-    return false;
-  const color = piece.classList.contains("red") ? "red" : "blue";
-  const isKing = piece.classList.contains("king");
-  const rowDiff = endRow - startRow;
-  const colDiff = endCol - startCol;
-  if (playerHasMandatoryCapture(color)) {
-    return isCaptureMove(piece, startRow, startCol, endRow, endCol);
-  }
-  if (isKing) {
-    if (Math.abs(rowDiff) !== Math.abs(colDiff) || rowDiff === 0) return false;
-    return isDiagonalPathClear(startRow, startCol, endRow, endCol, color);
-  } else {
-    if (Math.abs(rowDiff) !== 1 || Math.abs(colDiff) !== 1) return false;
-    if (color === "red" && rowDiff >= 0) return false;
-    if (color === "blue" && rowDiff <= 0) return false;
-    return true;
-  }
-}
-
-function findCapturedPieces(startRow, startCol, endRow, endCol, color) {
-  const captured = [];
-  if (Math.abs(endRow - startRow) !== Math.abs(endCol - startCol))
-    return captured;
-  const dRow = endRow > startRow ? 1 : -1;
-  const dCol = endCol > startCol ? 1 : -1;
-  let r = startRow + dRow;
-  let c = startCol + dCol;
-  while (r !== endRow || c !== endCol) {
-    const sq = document.querySelector(
-      `.square[data-row='${r}'][data-col='${c}']`
-    );
-    const p = sq?.querySelector(".piece");
-    if (p && !p.classList.contains(color)) captured.push(p);
-    r += dRow;
-    c += dCol;
-  }
-  return captured;
-}
-
-function checkForChainCapture(piece, row, col) {
-  return hasMandatoryCapture(piece, row, col);
-}
-
 // ================== MOVE HISTORY ==================
 function logMove(moveData) {
   if (replayMode) return;
@@ -940,41 +824,37 @@ function updateMoveHistoryDOM() {
 // ================== PERFORM MOVE ==================
 function performMove(piece, startRow, startCol, endRow, endCol) {
   if (gameOver || replayMode) return;
+
   const color = piece.classList.contains("red") ? "red" : "blue";
   const pieceKey =
     Array.from(piece.classList).find((cls) => cls.match(/^[rb]\d+$/)) ||
     "piece";
-  const pieceValue = parseInt(piece.dataset.value, 10);
-  let capturedPieces = [];
+  const pieceValue = parseFloat(piece.dataset.value);
   const isKing = piece.classList.contains("king");
-  if (isKing) {
-    capturedPieces = findCapturedPieces(
-      startRow,
-      startCol,
-      endRow,
-      endCol,
-      color
-    );
-  } else {
-    if (
-      Math.abs(endRow - startRow) === 2 &&
-      Math.abs(endCol - startCol) === 2
-    ) {
-      const midRow = (startRow + endRow) / 2;
-      const midCol = (startCol + endCol) / 2;
-      if (midRow < 0 || midRow > 7 || midCol < 0 || midCol > 7) {
-        console.warn("Invalid mid position:", midRow, midCol);
-        return;
-      }
-      const midSquare = document.querySelector(
-        `.square[data-row='${midRow}'][data-col='${midCol}']`
-      );
-      const midPiece = midSquare?.querySelector(".piece");
-      if (midPiece && !midPiece.classList.contains(color)) {
-        capturedPieces.push(midPiece);
-      }
-    }
+
+  // === Use unified logical move validation ===
+  const board = createLogicalBoard();
+  const allMoves = generateAllMoves(board, color);
+  const matchingMove = allMoves.find(m =>
+    m.startRow === startRow &&
+    m.startCol === startCol &&
+    m.endRow === endRow &&
+    m.endCol === endCol
+  );
+
+  if (!matchingMove) {
+    console.warn("Invalid move attempted:", { startRow, startCol, endRow, endCol });
+    return;
   }
+
+  let capturedPieces = [];
+  if (matchingMove.isCapture) {
+    capturedPieces = matchingMove.captured.map(([r, c]) => {
+      const sq = document.querySelector(`.square[data-row='${r}'][data-col='${c}']`);
+      return sq ? sq.querySelector('.piece') : null;
+    }).filter(p => p);
+  }
+
   let scoreChange = 0;
   if (capturedPieces.length > 0) {
     const capturedPiece = capturedPieces[0];
@@ -984,22 +864,27 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     }
     const operator = getMathSymbol(endRow, endCol);
     scoreChange = calculateSciDamathScore(piece, capturedPiece, operator);
+
     if (color === "red") redScore += scoreChange;
     else blueScore += scoreChange;
+
     redScoreEl.textContent = redScore.toFixed(2);
     blueScoreEl.textContent = blueScore.toFixed(2);
+
     playSound("capture");
+
     logMove({
       type: "capture",
       player: color,
       piece: pieceKey,
-      capturingValue: parseInt(piece.dataset.value, 10),
+      capturingValue: parseFloat(piece.dataset.value),
       operator: operator,
-      capturedValue: parseInt(capturedPiece.dataset.value, 10),
+      capturedValue: parseFloat(capturedPiece.dataset.value),
       result: scoreChange,
       isCapturingKing: piece.classList.contains("king"),
       isCapturedKing: capturedPiece.classList.contains("king"),
     });
+
     capturedPieces.forEach((p) => p.remove());
   } else {
     playSound("move");
@@ -1012,11 +897,14 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       endCol: endCol,
     });
   }
-  const startSq = piece.parentElement;
+
+  // === MOVE THE PIECE IN DOM ===
   const endSq = document.querySelector(
     `.square[data-row='${endRow}'][data-col='${endCol}']`
   );
   endSq.appendChild(piece);
+
+  // === KING PROMOTION ===
   let wasPromoted = false;
   if (!isKing) {
     if (color === "red" && endRow === 0) {
@@ -1028,6 +916,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       wasPromoted = true;
     }
   }
+
   if (wasPromoted) {
     playSound("promotion");
     logMove({
@@ -1036,37 +925,65 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       piece: pieceKey,
     });
   }
-  // 🚫 Promotion ends the turn immediately — no chain capture allowed
+
+  // === TURN & CHAIN CAPTURE LOGIC ===
   if (wasPromoted) {
+    // Promotion ends the turn immediately (even if capture occurred)
+    mustCaptureWithPiece = null;
+    switchTurn();
+  } else if (capturedPieces.length > 0) {
+    // Check for further captures from the new position
+    setTimeout(() => {
+      const newBoard = createLogicalBoard();
+      const landedPiece = newBoard[endRow][endCol];
+      if (landedPiece && landedPiece.color === color) {
+        const furtherCaptures = getImmediateCaptures(newBoard, endRow, endCol, landedPiece);
+        if (furtherCaptures.length > 0) {
+          mustCaptureWithPiece = piece;
+          // 🔥 If it's AI's turn and they just captured, execute the next capture immediately
+          if (gameMode === 'pvai' && color === 'blue') {
+            // Pick the first further capture
+            const nextMove = furtherCaptures[0];
+            // Execute it directly after a short delay
+            setTimeout(() => {
+              performMove(piece, nextMove.startRow, nextMove.startCol, nextMove.endRow, nextMove.endCol);
+            }, 1000);
+          }
+        } else {
+          mustCaptureWithPiece = null;
+          switchTurn();
+        }
+      } else {
+        mustCaptureWithPiece = null;
+        switchTurn();
+      }
+    }, 0);
+  } else {
     mustCaptureWithPiece = null;
     switchTurn();
   }
-  // 🔁 Otherwise, allow chain capture only if a capture occurred AND chain is possible
-  else if (
-    capturedPieces.length > 0 &&
-    checkForChainCapture(piece, endRow, endCol)
-  ) {
-    mustCaptureWithPiece = piece;
-  }
-  // 🛑 No promotion and no chain? End turn.
-  else {
-    mustCaptureWithPiece = null;
-    switchTurn();
-  }
+
+  // === SAVE STATE FOR UNDO/REDO ===
   moveHistoryStates = moveHistoryStates.slice(0, currentMoveIndex + 1);
   const currentState = saveBoardState();
   moveHistoryStates.push(currentState);
   currentMoveIndex++;
+
+  // === VISUAL FEEDBACK ===
   if (!replayMode) {
     highlightMoveSquares(startRow, startCol, endRow, endCol);
   }
   clearValidMoves();
+
+  // === START TIMERS IF NOT YET STARTED ===
   if (!timersStarted) {
     timersStarted = true;
     startSessionTimer();
     startRoundTimer();
     playSound("gameStart");
   }
+
+  // === CHECK GAME OVER CONDITIONS ===
   setTimeout(() => checkGameOver(), 100);
 }
 
@@ -1093,17 +1010,19 @@ function makeDebugKings() {
 // ================== VALID MOVES ==================
 function showValidMoves(piece, startRow, startCol) {
   clearValidMoves();
+  const board = createLogicalBoard();
+  const allMoves = generateAllMoves(board, currentPlayer);
+  const validEnds = new Set();
+  for (const m of allMoves) {
+    if (m.startRow === startRow && m.startCol === startCol) {
+      validEnds.add(`${m.endRow},${m.endCol}`);
+    }
+  }
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
-      const sq = document.querySelector(
-        `.square[data-row='${r}'][data-col='${c}']`
-      );
-      if (
-        sq &&
-        sq.classList.contains("playable") &&
-        isValidMove(piece, startRow, startCol, r, c)
-      ) {
-        sq.classList.add("valid-move");
+      if (validEnds.has(`${r},${c}`)) {
+        const sq = document.querySelector(`.square[data-row='${r}'][data-col='${c}']`);
+        if (sq) sq.classList.add("valid-move");
       }
     }
   }
@@ -1145,9 +1064,18 @@ gameboard.addEventListener("click", (e) => {
     const startCol = parseInt(startSq.dataset.col, 10);
     const endRow = parseInt(square.dataset.row, 10);
     const endCol = parseInt(square.dataset.col, 10);
-    if (isValidMove(selectedPiece, startRow, startCol, endRow, endCol)) {
-      performMove(selectedPiece, startRow, startCol, endRow, endCol);
-    }
+    const board = createLogicalBoard();
+    const allMoves = generateAllMoves(board, currentPlayer);
+    const isValid = allMoves.some(m =>
+      m.startRow === startRow &&
+      m.startCol === startCol &&
+      m.endRow === endRow &&
+      m.endCol === endCol
+    );
+
+if (isValid) {
+  performMove(selectedPiece, startRow, startCol, endRow, endCol);
+}
     selectedPiece = null;
     clearValidMoves();
   }
@@ -1217,7 +1145,16 @@ gameboard.addEventListener("drop", (e) => {
   const startCol = parseInt(startSq.dataset.col, 10);
   const endRow = parseInt(square.dataset.row, 10);
   const endCol = parseInt(square.dataset.col, 10);
-  if (isValidMove(selectedPiece, startRow, startCol, endRow, endCol)) {
+    const board = createLogicalBoard();
+  const allMoves = generateAllMoves(board, currentPlayer);
+  const isValid = allMoves.some(m =>
+    m.startRow === startRow &&
+    m.startCol === startCol &&
+    m.endRow === endRow &&
+    m.endCol === endCol
+  );
+
+  if (isValid) {
     performMove(selectedPiece, startRow, startCol, endRow, endCol);
   }
   if (selectedPiece) {
@@ -1235,7 +1172,7 @@ function startSessionTimer() {
       if (sessionMinutes === 0) {
         clearInterval(sessionInterval);
         clearInterval(roundInterval);
-        endGame("Time's up! (20-minute session limit)");
+        endGame("Session time expired.");
         return;
       }
       sessionMinutes--;
@@ -1254,9 +1191,7 @@ function startRoundTimer() {
       if (roundMinutes === 0 && roundSeconds === 0) {
         clearInterval(roundInterval);
         clearInterval(sessionInterval);
-        const loser = currentPlayer;
-        const winner = loser === "red" ? "Blue" : "Red";
-        endGame(`${winner} wins! (${loser} ran out of round time)`);
+        endGame("Round time expired.");
         return;
       }
       roundMinutes--;
@@ -1353,7 +1288,14 @@ function setupDebugControls() {
   const transparencyBtn = document.getElementById("toggle-transparency");
   const backToMenuBtn = document.getElementById("back-to-menu");
   const darkModeBtn = document.getElementById("toggle-dark-mode");
+  const difficultySelect = document.getElementById("ai-difficulty");
 
+  if (difficultySelect) {
+    difficultySelect.addEventListener("change", (e) => {
+      aiDepth = parseInt(e.target.value);
+      localStorage.setItem("aiDepth", aiDepth);
+    });
+  }
   if (toggle) {
     toggle.addEventListener("click", () => {
       debugMode = !debugMode;
@@ -1461,9 +1403,10 @@ function checkGameOver() {
   const bluePieces = document.querySelectorAll(".piece.blue").length;
   const currentPlayerPieces = currentPlayer === "red" ? redPieces : bluePieces;
 
-  if (currentPlayerPieces === 0) {
-    const winner = currentPlayer === "red" ? "Blue" : "Red";
-    endGame(`${winner} wins! (Opponent has no chips)`);
+  if (redPieces === 0 || bluePieces === 0) {
+    // Game ends when either player has no pieces
+    // But winner is determined by FINAL SCORE, not piece count
+    endGame("Game ended: One player has no remaining pieces.");
     return true;
   }
 
@@ -1482,28 +1425,6 @@ function checkGameOver() {
     }
   }
 
-  return false;
-}
-
-function playerHasAnyValidMove(color) {
-  const pieces = document.querySelectorAll(`.piece.${color}`);
-  for (const piece of pieces) {
-    const sq = piece.parentElement;
-    const row = parseInt(sq.dataset.row, 10);
-    const col = parseInt(sq.dataset.col, 10);
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const targetSq = document.querySelector(
-          `.square[data-row='${r}'][data-col='${c}']`
-        );
-        if (targetSq && targetSq.classList.contains("playable")) {
-          if (isValidMove(piece, row, col, r, c)) {
-            return true;
-          }
-        }
-      }
-    }
-  }
   return false;
 }
 
@@ -1553,13 +1474,11 @@ function endGame(reason, isSurrender = false) {
   const newGameBtn = document.getElementById("new-game-btn");
   const closeBtn = document.getElementById("close-modal");
 
-  let finalMessage = "GAME OVER\n" + reason;
-
+  let finalMessage = "" + reason.replace(/\n/g, "<br>");
   if (!isSurrender) {
     const finalScores = calculateFinalScores();
     const finalRed = finalScores.red.toFixed(2);
     const finalBlue = finalScores.blue.toFixed(2);
-
     let winnerMessage = "";
     const redScore = parseFloat(finalRed);
     const blueScore = parseFloat(finalBlue);
@@ -1570,12 +1489,9 @@ function endGame(reason, isSurrender = false) {
     } else {
       winnerMessage = "It's a draw!";
     }
-
-    finalMessage +=
-      `\n\nFinal Scores:\nRed: ${finalRed}\nBlue: ${finalBlue}\n${winnerMessage}`;
+    finalMessage += `<br><br>Final Scores:<br>Red: ${finalRed}<br>Blue: ${finalBlue}<br>${winnerMessage}`;
   }
-
-  messageEl.textContent = finalMessage;
+  messageEl.innerHTML = finalMessage; // ✅ Use innerHTML
   modal.hidden = false;
 
   const closeModal = () => {
@@ -1692,8 +1608,32 @@ function initializeGame() {
   // ✅ 3. FINALLY: Reset game state (which places pieces on existing board)
   resetGame();
 
+  const savedDepth = localStorage.getItem("aiDepth");
+  if (savedDepth && [1,2,3,4].includes(parseInt(savedDepth))) {
+    aiDepth = parseInt(savedDepth);
+    document.getElementById("ai-difficulty").value = aiDepth;
+  }
+
   // Setup controls after board exists
   setupDebugControls();
+
+  localStorage.removeItem('aiDifficulty'); // Optional: reset next time
+}
+
+// Create a virtual board state from DOM
+function createVirtualBoard() {
+  const board = Array(8).fill().map(() => Array(8).fill(null));
+  document.querySelectorAll('.piece').forEach(piece => {
+    const sq = piece.parentElement;
+    const row = parseInt(sq.dataset.row);
+    const col = parseInt(sq.dataset.col);
+    board[row][col] = {
+      color: piece.classList.contains('red') ? 'red' : 'blue',
+      value: parseFloat(piece.dataset.value),
+      isKing: piece.classList.contains('king')
+    };
+  });
+  return board;
 }
 
 // ================== INITIALIZATION ==================
@@ -1734,7 +1674,6 @@ document.addEventListener("DOMContentLoaded", () => {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     calculateSciDamathScore,
-    isValidMove,
     playerHasMandatoryCapture,
   };
 }

@@ -97,20 +97,33 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Variant selection
-  document.addEventListener("click", (e) => {
-    if (
-      e.target.classList.contains("variant-btn") &&
-      e.target.dataset.variant
-    ) {
-      const variant = e.target.dataset.variant;
-      if (variant === "integer") {
-        window.location.href = "pvp/sci-damath/pvp-integer-scidamath.html";
-      } else if (variant === "integer-ai") {
-        window.location.href = "pvai/sci-damath/pvai-integer-scidamath.html";
-      }
+  // Handle variant selection → show difficulty for AI games
+document.addEventListener("click", (e) => {
+  if (e.target.classList.contains("variant-btn") && e.target.dataset.variant) {
+    const variant = e.target.dataset.variant;
+
+    if (variant === "integer") {
+      // PvP: go directly to game
+      window.location.href = "pvp/sci-damath/pvp-integer-scidamath.html";
+    } 
+    else if (variant === "integer-ai") {
+      // PvAI: show difficulty modal first
+      openModal("difficulty-modal");
+
+      // Set up one-time listener for difficulty buttons
+      const handleDifficulty = (event) => {
+        if (event.target.classList.contains("difficulty-btn")) {
+          const difficulty = event.target.dataset.difficulty;
+          localStorage.setItem("aiDifficulty", difficulty);
+          window.location.href = "pvai/sci-damath/pvai-integer-scidamath.html";
+          // Clean up listener to avoid duplicates
+          document.removeEventListener("click", handleDifficulty);
+        }
+      };
+      document.addEventListener("click", handleDifficulty);
     }
-  });
+  }
+});
 
   // Options handling
   const soundVolume = document.getElementById("sound-volume");

@@ -11,9 +11,6 @@
   <!-- Background board (no pieces) -->
   <div id="menu-board-background" aria-hidden="true"></div>
 
-  <!-- Skip link -->
-  <a href="#main-menu" class="skip-link">Skip to main menu</a>
-
   <!-- Main menu content -->
   <div id="main-menu" class="menu-content">
     <h1 id="menu-title">Sci-Damath</h1>
@@ -95,6 +92,20 @@
     </div>
   </div>
 
+<!-- AI Difficulty Modal -->
+<div id="difficulty-modal" class="modal" hidden role="dialog" aria-labelledby="difficulty-title">
+  <div class="modal-content">
+    <h2 id="difficulty-title">Select Difficulty</h2>
+    <p>How challenging should the AI be?</p>
+    <div class="difficulty-options">
+      <button class="difficulty-btn" data-difficulty="1">Easy</button>
+      <button class="difficulty-btn" data-difficulty="2">Medium</button>
+      <button class="difficulty-btn" data-difficulty="3">Hard</button>
+      <button class="difficulty-btn" data-difficulty="4">Expert</button>
+    </div>
+    <button class="modal-close">Cancel</button>
+  </div>
+</div>
   <script src="assets/js/menu.js"></script>
 </body>
 </html>
