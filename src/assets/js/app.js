@@ -7,8 +7,12 @@ let redScore = 0.0;
 let blueScore = 0.0;
 let currentPlayer = "red";
 let selectedPiece = null;
-let moveHistoryEntries = []; // Track move history entries for undo/redo
-let currentHistoryIndex = -1; // Current position in move history
+let moveHistoryEntries = [];
+let turnHistory = []; // Each entry: { player, startState, endState, moveCount }
+let currentHistoryIndex = -1;
+let currentTurnIndex = -1; // Index of last completed turn
+let currentTurnStartState = null; // State at start of current (incomplete) turn
+let isTurnActive = false;
 let moveHistory = []; // For repetition detection
 let surrenderRequested = null; // "red", "blue", or null
 let sessionMinutes = 20;
@@ -19,47 +23,35 @@ let sessionInterval;
 let roundInterval;
 let timersStarted = false;
 let mustCaptureWithPiece = null;
-let moveHistoryStates = []; // Full board states for undo/redo
-let currentMoveIndex = -1; // Current position in move history
 let replayMode = false;
 let replayInterval = null;
 let gameOver = false;
 let piecesTransparent = false;
 let aiDepth = 1; // Default depth
-
 const savedDifficulty = localStorage.getItem('aiDifficulty');
-
-if (savedDifficulty && [1,2,3,4].includes(parseInt(savedDifficulty))) {
+if (savedDifficulty && [1, 3, 4, 6].includes(parseInt(savedDifficulty))) {
   aiDepth = parseInt(savedDifficulty);
 }
-
 // src/assets/js/app.js
-
 // Detect game mode from URL
 const path = window.location.pathname;
-let gameMode = null; // 'pvp', 'pvai', or 'debug'
-
-if (path.includes('/pvp/')) {
-  gameMode = 'pvp';
-} else if (path.includes('/pvai/')) {
+let gameMode = 'pvp'; // default
+if (path.includes('/pvai/')) {
   gameMode = 'pvai';
 } else if (path.includes('/debug_mode/')) {
   gameMode = 'debug';
   window.debugMode = true; // Enable debug setup
 }
-
 // Rest of your game logic stays the same
 // Only branch when needed:
 if (gameMode === 'pvai' && currentPlayer === 'blue') {
   makeAIMove(); // AI logic only in pvai
 }
-
 // Support external debug mode flag
 if (typeof window.debugMode === 'undefined') {
   window.debugMode = false;
 }
 let debugMode = window.debugMode;
-
 // ================== INITIAL SETUP (LIGHT SQUARES) ==================
 let INITIAL_SETUP = {
   "0,0": "b1",
@@ -87,7 +79,6 @@ let INITIAL_SETUP = {
   "7,5": "r11",
   "7,7": "r12",
 };
-
 let DEBUG_SETUP = {
   "0,0": "r2",
   "7,7": "r6",
@@ -96,18 +87,14 @@ let DEBUG_SETUP = {
   "2,2": "b3",
   "4,2": "b4",
 };
-
 const sessionEl = document.getElementById("session-time");
 const roundEl = document.getElementById("round-time");
-
 // ================== UNIFIED GAME LOGIC (DOM-FREE) ==================
-
 const DIRECTIONS = {
   red: [[-1, -1], [-1, 1]],
   blue: [[1, -1], [1, 1]],
   king: [[-1, -1], [-1, 1], [1, -1], [1, 1]]
 };
-
 // Convert DOM board to logical state
 function createLogicalBoard() {
   const board = Array(8).fill().map(() => Array(8).fill(null));
@@ -122,21 +109,17 @@ function createLogicalBoard() {
   });
   return board;
 }
-
 // Apply move to logical board (returns new board)
 function applyLogicalMove(board, move) {
   const newBoard = board.map(row => [...row]);
   const { startRow, startCol, endRow, endCol, captured = [] } = move;
-
   // Move piece
   newBoard[endRow][endCol] = newBoard[startRow][startCol];
   newBoard[startRow][startCol] = null;
-
   // Remove captured pieces
   for (const [r, c] of captured) {
     newBoard[r][c] = null;
   }
-
   // Promote if needed
   const piece = newBoard[endRow][endCol];
   if (piece && !piece.isKing) {
@@ -144,10 +127,8 @@ function applyLogicalMove(board, move) {
       newBoard[endRow][endCol] = { ...piece, isKing: true };
     }
   }
-
   return newBoard;
 }
-
 // Generate all capture moves for a player
 function generateAllCaptureMoves(board, color) {
   const moves = [];
@@ -162,7 +143,6 @@ function generateAllCaptureMoves(board, color) {
   }
   return moves;
 }
-
 // Generate all non-capture moves
 function generateAllNonCaptureMoves(board, color) {
   const moves = [];
@@ -193,7 +173,6 @@ function generateAllNonCaptureMoves(board, color) {
   }
   return moves;
 }
-
 // Main move generator
 function generateAllMoves(board, color) {
   const captures = generateAllCaptureMoves(board, color);
@@ -202,7 +181,6 @@ function generateAllMoves(board, color) {
   }
   return generateAllNonCaptureMoves(board, color);
 }
-
 // Evaluate board for minimax
 function evaluateBoardState(board, redScore, blueScore) {
   let redPieceValue = 0;
@@ -220,16 +198,13 @@ function evaluateBoardState(board, redScore, blueScore) {
   const totalBlue = blueScore + bluePieceValue;
   return totalBlue - totalRed; // Blue wants this LOW
 }
-
 // Minimax with alpha-beta
 function minimax(board, depth, alpha, beta, maximizingPlayer, redScore, blueScore) {
   if (depth === 0) {
     return evaluateBoardState(board, redScore, blueScore);
   }
-
   const color = maximizingPlayer ? 'blue' : 'red';
   const moves = generateAllMoves(board, color);
-
   if (maximizingPlayer) {
     let maxEval = -Infinity;
     for (const move of moves) {
@@ -252,13 +227,11 @@ function minimax(board, depth, alpha, beta, maximizingPlayer, redScore, blueScor
     return minEval;
   }
 }
-
 // Map logical move back to DOM piece
 function findPieceInDOM(startRow, startCol) {
   const sq = document.querySelector(`.square[data-row='${startRow}'][data-col='${startCol}']`);
   return sq ? sq.querySelector('.piece') : null;
 }
-
 // Execute logical move in DOM
 function executeLogicalMove(move) {
   const piece = findPieceInDOM(move.startRow, move.startCol);
@@ -268,7 +241,6 @@ function executeLogicalMove(move) {
   }
   performMove(piece, move.startRow, move.startCol, move.endRow, move.endCol);
 }
-
 // ================== PIECES ==================
 const PIECES = {
   r1: { color: "red", value: -9 },
@@ -296,7 +268,6 @@ const PIECES = {
   b11: { color: "blue", value: 6 },
   b12: { color: "blue", value: -9 },
 };
-
 // ================== DAMATH LAYOUT ==================
 const DAMATH_LAYOUT = [
   ["x", "", "÷", "", "-", "", "+", ""],
@@ -308,7 +279,6 @@ const DAMATH_LAYOUT = [
   ["-", "", "+", "", "x", "", "÷", ""],
   ["", "+", "", "-", "", "÷", "", "x"],
 ];
-
 // ================== SOUND EFFECTS ==================
 const sounds = {
   move: document.getElementById("move-sound"),
@@ -317,7 +287,6 @@ const sounds = {
   gameStart: document.getElementById("game-start"),
   gameEnd: document.getElementById("game-end"),
 };
-
 function playSound(soundName) {
   const sound = sounds[soundName];
   if (sound) {
@@ -325,7 +294,6 @@ function playSound(soundName) {
     sound.play().catch((e) => console.log("Audio play failed:", e));
   }
 }
-
 // ================== GAME STATUS MESSAGES ==================
 function showErrorMessage(message) {
   if (!errorMessageEl) return;
@@ -335,7 +303,6 @@ function showErrorMessage(message) {
     errorMessageEl.hidden = true;
   }, 5000);
 }
-
 // ================== BOARD RENDERING (PURE FUNCTION) ==================
 function createBoardDOM(showPieces = false, setup = null) {
   const fragment = document.createDocumentFragment();
@@ -370,7 +337,6 @@ function createBoardDOM(showPieces = false, setup = null) {
   }
   return fragment;
 }
-
 // ================== BOARD GENERATION ==================
 function initializeBoard() {
   try {
@@ -397,12 +363,10 @@ function initializeBoard() {
     console.error("Board initialization error:", error);
   }
 }
-
 // ================== UTIL FUNCTIONS ==================
 function getMathSymbol(row, col) {
   return DAMATH_LAYOUT[row][col];
 }
-
 function highlightMoveSquares(startRow, startCol, endRow, endCol) {
   clearMoveHighlights();
   const fromSquare = document.querySelector(
@@ -415,7 +379,6 @@ function highlightMoveSquares(startRow, startCol, endRow, endCol) {
   if (toSquare) toSquare.classList.add("move-to");
   setTimeout(clearMoveHighlights, 2000);
 }
-
 function switchTurn() {
   mustCaptureWithPiece = null; // 👈 Prevent lockup
   currentPlayer = currentPlayer === "red" ? "blue" : "red";
@@ -430,15 +393,13 @@ function switchTurn() {
   roundEl.className = "timer";
   roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
   startRoundTimer();
-
   // AI move logic
   if (gameMode === "pvai" && currentPlayer === "blue") {
     setTimeout(() => {
       makeAIMove();
-    }, 500);
+    }, 750);
   }
 }
-
 // ================== MINIMAX AI WITH ALPHA-BETA PRUNING ==================
 function makeAIMove() {
   if (gameOver || currentPlayer !== "blue" || replayMode) return;
@@ -483,7 +444,6 @@ function makeAIMove() {
   }
   executeLogicalMove(bestMove);
 }
-
 // Returns only 1-step capture moves from (r, c)
 // Returns only ONE jump (not full chains) — suitable for step-by-step execution
 function getImmediateCaptures(board, r, c, piece) {
@@ -491,7 +451,6 @@ function getImmediateCaptures(board, r, c, piece) {
   const color = piece.color;
   const isKing = piece.isKing;
   const dirs = DIRECTIONS.king; // All 4 diagonal directions
-
   for (const [dr, dc] of dirs) {
     if (isKing) {
       // 👑 INTERNATIONAL-STYLE FLYING KING
@@ -499,7 +458,6 @@ function getImmediateCaptures(board, r, c, piece) {
       let nr = r + dr;
       let nc = c + dc;
       let enemyR = null, enemyC = null;
-
       while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
         const target = board[nr][nc];
         if (target) {
@@ -511,16 +469,12 @@ function getImmediateCaptures(board, r, c, piece) {
         nr += dr;
         nc += dc;
       }
-
       if (enemyR === null) continue; // no enemy found
-
       // Step 2: Allow landing on ANY empty square BEYOND the enemy
       let landR = enemyR + dr;
       let landC = enemyC + dc;
-
       while (landR >= 0 && landR < 8 && landC >= 0 && landC < 8) {
         if (board[landR][landC]) break; // blocked by another piece
-
         // Valid capture: jump over enemy and land here
         captures.push({
           startRow: r,
@@ -530,7 +484,6 @@ function getImmediateCaptures(board, r, c, piece) {
           captured: [[enemyR, enemyC]],
           isCapture: true
         });
-
         // Continue to next possible landing square (flying king)
         landR += dr;
         landC += dc;
@@ -541,19 +494,15 @@ function getImmediateCaptures(board, r, c, piece) {
       const midC = c + dc;
       const landR = midR + dr;
       const landC = midC + dc;
-
       // Bounds check
       if (
         midR < 0 || midR >= 8 || midC < 0 || midC >= 8 ||
         landR < 0 || landR >= 8 || landC < 0 || landC >= 8
       ) continue;
-
       const midPiece = board[midR][midC];
       const landPiece = board[landR][landC];
-
       // Must have enemy in middle and empty landing
       if (!midPiece || midPiece.color === color || landPiece) continue;
-
       captures.push({
         startRow: r,
         startCol: c,
@@ -566,7 +515,6 @@ function getImmediateCaptures(board, r, c, piece) {
   }
   return captures;
 }
-
 function calculateFinalScores() {
   const redPieces = document.querySelectorAll(".piece.red");
   const bluePieces = document.querySelectorAll(".piece.blue");
@@ -600,7 +548,6 @@ function calculateFinalScores() {
   }
   return { red: redScore, blue: blueScore };
 }
-
 function saveBoardState() {
   const state = {
     redScore: redScore,
@@ -608,9 +555,9 @@ function saveBoardState() {
     currentPlayer: currentPlayer,
     mustCaptureWithPiece: mustCaptureWithPiece
       ? {
-          row: parseInt(mustCaptureWithPiece.parentElement.dataset.row),
-          col: parseInt(mustCaptureWithPiece.parentElement.dataset.col),
-        }
+        row: parseInt(mustCaptureWithPiece.parentElement.dataset.row),
+        col: parseInt(mustCaptureWithPiece.parentElement.dataset.col),
+      }
       : null,
     pieces: [],
   };
@@ -642,7 +589,6 @@ function saveBoardState() {
   });
   return state;
 }
-
 function restoreBoardState(state) {
   document.querySelectorAll(".piece").forEach((p) => p.remove());
   state.pieces.forEach((pieceData) => {
@@ -693,7 +639,6 @@ function restoreBoardState(state) {
     startRoundTimer();
   }
 }
-
 // ================== DEPED SCORING ==================
 function calculateSciDamathScore(capturingPiece, capturedPiece, operator) {
   const capturingValue = parseFloat(capturingPiece.dataset.value);
@@ -737,7 +682,6 @@ function calculateSciDamathScore(capturingPiece, capturedPiece, operator) {
   const rounded = Math.round(finalResult * 100) / 100;
   return Number(rounded.toFixed(2));
 }
-
 // ================== MOVE HISTORY ==================
 function logMove(moveData) {
   if (replayMode) return;
@@ -758,7 +702,6 @@ function logMove(moveData) {
   currentHistoryIndex++;
   updateMoveHistoryDOM();
 }
-
 function updateMoveHistoryDOM() {
   const historyList = document.getElementById("move-history-content");
   if (!historyList) return;
@@ -792,9 +735,8 @@ function updateMoveHistoryDOM() {
     } else if (entry.type === "move") {
       moveText = `
         <strong>${entry.player.toUpperCase()}</strong>: 
-        ${entry.piece}(${entry.value}) moved to (${entry.endRow},${
-        entry.endCol
-      })
+        ${entry.piece}(${entry.value}) moved to (${entry.endRow},${entry.endCol
+        })
       `;
     } else if (entry.type === "promotion") {
       moveText = `
@@ -820,7 +762,6 @@ function updateMoveHistoryDOM() {
     scrollableContainer.scrollTop = scrollableContainer.scrollHeight;
   }
 }
-
 // ================== PERFORM MOVE ==================
 function performMove(piece, startRow, startCol, endRow, endCol) {
   if (gameOver || replayMode) return;
@@ -841,7 +782,6 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     m.endRow === endRow &&
     m.endCol === endCol
   );
-
   if (!matchingMove) {
     console.warn("Invalid move attempted:", { startRow, startCol, endRow, endCol });
     return;
@@ -864,15 +804,11 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     }
     const operator = getMathSymbol(endRow, endCol);
     scoreChange = calculateSciDamathScore(piece, capturedPiece, operator);
-
     if (color === "red") redScore += scoreChange;
     else blueScore += scoreChange;
-
     redScoreEl.textContent = redScore.toFixed(2);
     blueScoreEl.textContent = blueScore.toFixed(2);
-
     playSound("capture");
-
     logMove({
       type: "capture",
       player: color,
@@ -884,7 +820,6 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       isCapturingKing: piece.classList.contains("king"),
       isCapturedKing: capturedPiece.classList.contains("king"),
     });
-
     capturedPieces.forEach((p) => p.remove());
   } else {
     playSound("move");
@@ -916,7 +851,6 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       wasPromoted = true;
     }
   }
-
   if (wasPromoted) {
     playSound("promotion");
     logMove({
@@ -927,12 +861,14 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   }
 
   // === TURN & CHAIN CAPTURE LOGIC ===
+  let turnEnded = false;
   if (wasPromoted) {
-    // Promotion ends the turn immediately (even if capture occurred)
+    // Promotion ends the turn immediately
     mustCaptureWithPiece = null;
     switchTurn();
+    turnEnded = true;
   } else if (capturedPieces.length > 0) {
-    // Check for further captures from the new position
+    // Check for further captures
     setTimeout(() => {
       const newBoard = createLogicalBoard();
       const landedPiece = newBoard[endRow][endCol];
@@ -940,34 +876,57 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
         const furtherCaptures = getImmediateCaptures(newBoard, endRow, endCol, landedPiece);
         if (furtherCaptures.length > 0) {
           mustCaptureWithPiece = piece;
-          // 🔥 If it's AI's turn and they just captured, execute the next capture immediately
+          // AI auto-continues chain
           if (gameMode === 'pvai' && color === 'blue') {
-            // Pick the first further capture
             const nextMove = furtherCaptures[0];
-            // Execute it directly after a short delay
             setTimeout(() => {
               performMove(piece, nextMove.startRow, nextMove.startCol, nextMove.endRow, nextMove.endCol);
-            }, 1000);
+            }, 500);
           }
         } else {
           mustCaptureWithPiece = null;
           switchTurn();
+          turnEnded = true;
         }
       } else {
         mustCaptureWithPiece = null;
         switchTurn();
+        turnEnded = true;
       }
     }, 0);
   } else {
     mustCaptureWithPiece = null;
     switchTurn();
+    turnEnded = true;
   }
 
-  // === SAVE STATE FOR UNDO/REDO ===
-  moveHistoryStates = moveHistoryStates.slice(0, currentMoveIndex + 1);
+  // === TURN-BASED STATE TRACKING FOR UNDO ===
   const currentState = saveBoardState();
-  moveHistoryStates.push(currentState);
-  currentMoveIndex++;
+
+  // Initialize turn start state if this is the first move of a turn
+  if (currentTurnStartState === null) {
+    currentTurnStartState = currentState;
+  }
+
+  // Save turn when it ends
+  if (turnEnded) {
+    // Push a turn entry: { player, startState, endState }
+    const turnEntry = {
+      player: color,
+      startState: currentTurnStartState,
+      endState: currentState
+    };
+
+    // Maintain turn history (replace future if redo was used)
+    currentTurnStartState = currentState;
+    turnHistory = turnHistory.slice(0, currentTurnIndex + 1);
+    turnHistory.push(turnEntry);
+    currentTurnIndex++;
+    currentTurnStartState = null;
+
+    // Reset for next turn
+    currentTurnStartState = null;
+  }
 
   // === VISUAL FEEDBACK ===
   if (!replayMode) {
@@ -993,7 +952,6 @@ function makeKing(piece) {
   piece.classList.add("promote");
   setTimeout(() => piece.classList.remove("promote"), 600);
 }
-
 // ================== DEBUG KINGS ==================
 function makeDebugKings() {
   const positions = ["0,0", "7,7"];
@@ -1006,7 +964,6 @@ function makeDebugKings() {
     if (piece && !piece.classList.contains("king")) makeKing(piece);
   });
 }
-
 // ================== VALID MOVES ==================
 function showValidMoves(piece, startRow, startCol) {
   clearValidMoves();
@@ -1027,7 +984,6 @@ function showValidMoves(piece, startRow, startCol) {
     }
   }
 }
-
 function clearValidMoves() {
   document.querySelectorAll(".square.valid-move").forEach((sq) => {
     sq.classList.remove("valid-move");
@@ -1036,14 +992,12 @@ function clearValidMoves() {
     sq.classList.remove("piece-dragging");
   });
 }
-
 // ================== INPUT HANDLERS ==================
 gameboard.addEventListener("click", (e) => {
   // Prevent player interaction during AI turn in PvAI mode
   if (gameMode === 'pvai' && currentPlayer === 'blue') {
     return;
   }
-  
   const piece = e.target.closest(".piece");
   const square = e.target.closest(".square");
   if (!square || !square.classList.contains("playable")) return;
@@ -1072,22 +1026,19 @@ gameboard.addEventListener("click", (e) => {
       m.endRow === endRow &&
       m.endCol === endCol
     );
-
-if (isValid) {
-  performMove(selectedPiece, startRow, startCol, endRow, endCol);
-}
+    if (isValid) {
+      performMove(selectedPiece, startRow, startCol, endRow, endCol);
+    }
     selectedPiece = null;
     clearValidMoves();
   }
 });
-
 gameboard.addEventListener("dragstart", (e) => {
   // Prevent player interaction during AI turn in PvAI mode
   if (gameMode === 'pvai' && currentPlayer === 'blue') {
     e.preventDefault();
     return;
   }
-  
   const piece = e.target.closest(".piece");
   if (!piece || !piece.classList.contains(currentPlayer)) {
     e.preventDefault();
@@ -1107,13 +1058,11 @@ gameboard.addEventListener("dragstart", (e) => {
   const startCol = parseInt(pieceSquare.dataset.col, 10);
   showValidMoves(piece, startRow, startCol);
 });
-
 function cleanupDrag() {
   document.querySelectorAll(".square.piece-dragging").forEach((sq) => {
     sq.classList.remove("piece-dragging");
   });
 }
-
 gameboard.addEventListener("dragend", (e) => {
   if (selectedPiece) {
     selectedPiece.parentElement.classList.remove("piece-dragging");
@@ -1122,11 +1071,9 @@ gameboard.addEventListener("dragend", (e) => {
     cleanupDrag();
   }
 });
-
 gameboard.addEventListener("dragover", (e) => {
   e.preventDefault();
 });
-
 gameboard.addEventListener("drop", (e) => {
   e.preventDefault();
   // Prevent player interaction during AI turn in PvAI mode
@@ -1134,7 +1081,6 @@ gameboard.addEventListener("drop", (e) => {
     cleanupDrag();
     return;
   }
-  
   const square = e.target.closest(".square");
   if (!square || !square.classList.contains("playable") || !selectedPiece) {
     cleanupDrag();
@@ -1145,7 +1091,7 @@ gameboard.addEventListener("drop", (e) => {
   const startCol = parseInt(startSq.dataset.col, 10);
   const endRow = parseInt(square.dataset.row, 10);
   const endCol = parseInt(square.dataset.col, 10);
-    const board = createLogicalBoard();
+  const board = createLogicalBoard();
   const allMoves = generateAllMoves(board, currentPlayer);
   const isValid = allMoves.some(m =>
     m.startRow === startRow &&
@@ -1153,7 +1099,6 @@ gameboard.addEventListener("drop", (e) => {
     m.endRow === endRow &&
     m.endCol === endCol
   );
-
   if (isValid) {
     performMove(selectedPiece, startRow, startCol, endRow, endCol);
   }
@@ -1163,7 +1108,6 @@ gameboard.addEventListener("drop", (e) => {
   }
   clearValidMoves();
 });
-
 // ================== TIMERS ==================
 function startSessionTimer() {
   if (sessionInterval) clearInterval(sessionInterval);
@@ -1183,7 +1127,6 @@ function startSessionTimer() {
     updateTimerDisplay();
   }, 1000);
 }
-
 function startRoundTimer() {
   if (roundInterval) clearInterval(roundInterval);
   roundInterval = setInterval(() => {
@@ -1200,7 +1143,6 @@ function startRoundTimer() {
     updateTimerDisplay();
   }, 1000);
 }
-
 function updateTimerDisplay() {
   sessionEl.textContent = `${String(sessionMinutes).padStart(2, "0")}:${String(
     sessionSeconds
@@ -1213,7 +1155,6 @@ function updateTimerDisplay() {
     roundMinutes === 0 && roundSeconds <= 10
   );
 }
-
 // ================== DEBUG & INIT ==================
 function placeInitialPieces() {
   document.querySelectorAll(".piece").forEach((p) => p.remove());
@@ -1241,12 +1182,14 @@ function placeInitialPieces() {
   setTimeout(() => {
     const initialState = saveBoardState();
     moveHistoryStates = [initialState];
-    currentMoveIndex = 0;
+    turnHistory = [];
+    currentTurnIndex = -1;
+    currentTurnStartState = null;
+    isTurnActive = false;
     currentHistoryIndex = -1;
     updateMoveHistoryDOM();
   }, 50);
 }
-
 function resetGame() {
   redScore = 0.0;
   blueScore = 0.0;
@@ -1265,8 +1208,6 @@ function resetGame() {
   roundMinutes = 1;
   roundSeconds = 0;
   updateTimerDisplay();
-  moveHistoryStates = [];
-  currentMoveIndex = -1;
   moveHistoryEntries = [];
   currentHistoryIndex = -1;
   replayMode = false;
@@ -1274,7 +1215,6 @@ function resetGame() {
   if (errorMessageEl) errorMessageEl.hidden = true;
   placeInitialPieces();
 }
-
 function setupDebugControls() {
   const toggle = document.getElementById("debug-toggle");
   const reset = document.getElementById("reset-board");
@@ -1289,7 +1229,6 @@ function setupDebugControls() {
   const backToMenuBtn = document.getElementById("back-to-menu");
   const darkModeBtn = document.getElementById("toggle-dark-mode");
   const difficultySelect = document.getElementById("ai-difficulty");
-
   if (difficultySelect) {
     difficultySelect.addEventListener("change", (e) => {
       aiDepth = parseInt(e.target.value);
@@ -1364,7 +1303,6 @@ function setupDebugControls() {
       });
     });
   }
-
   // Dark mode logic (unchanged)
   if (darkModeBtn) {
     const savedTheme = localStorage.getItem("theme");
@@ -1387,35 +1325,29 @@ function setupDebugControls() {
     });
   }
 }
-
 // ================== GAME OVER FLAG CONDITIONS ==================
 function checkGameOver() {
   if (gameOver) return true;
-
   // ✅ HANDLE SURRENDER FIRST (no score calculation)
   if (surrenderRequested) {
     const winner = surrenderRequested === "red" ? "Blue" : "Red";
     endGame(`${winner} wins! (${surrenderRequested} surrendered)`, true); // 👈 true = isSurrender
     return true;
   }
-
   const redPieces = document.querySelectorAll(".piece.red").length;
   const bluePieces = document.querySelectorAll(".piece.blue").length;
   const currentPlayerPieces = currentPlayer === "red" ? redPieces : bluePieces;
-
   if (redPieces === 0 || bluePieces === 0) {
     // Game ends when either player has no pieces
     // But winner is determined by FINAL SCORE, not piece count
     endGame("Game ended: One player has no remaining pieces.");
     return true;
   }
-
   if (!playerHasAnyValidMove(currentPlayer)) {
     const winner = currentPlayer === "red" ? "Blue" : "Red";
     endGame(`${winner} wins! (Opponent has no valid moves)`);
     return true;
   }
-
   if (currentPlayerPieces === 1 && moveHistory.length >= 6) {
     const lastThree = moveHistory.slice(-3);
     const prevThree = moveHistory.slice(-6, -3);
@@ -1424,16 +1356,13 @@ function checkGameOver() {
       return true;
     }
   }
-
   return false;
 }
-
 function showConfirmationModal(message, onConfirm) {
   const modal = document.getElementById("confirmation-modal");
   const messageEl = document.getElementById("confirmation-message");
   const yesBtn = document.getElementById("confirm-yes");
   const noBtn = document.getElementById("confirm-no");
-
   if (!modal || !messageEl || !yesBtn || !noBtn) {
     console.error("Confirmation modal elements are missing from HTML!");
     // Fallback to confirm() if modal isn't ready
@@ -1442,38 +1371,30 @@ function showConfirmationModal(message, onConfirm) {
     }
     return;
   }
-
   messageEl.textContent = message;
   modal.hidden = false;
-
   const close = () => {
     modal.hidden = true;
     yesBtn.onclick = null;
     noBtn.onclick = null;
   };
-
   yesBtn.onclick = () => {
     close();
     if (onConfirm) onConfirm();
   };
-
   noBtn.onclick = close;
-
   yesBtn.focus();
 }
-
 function endGame(reason, isSurrender = false) {
   if (gameOver) return;
   gameOver = true;
   if (sessionInterval) clearInterval(sessionInterval);
   if (roundInterval) clearInterval(roundInterval);
   playSound("gameEnd");
-
   const modal = document.getElementById("game-over-modal");
   const messageEl = document.getElementById("game-over-message");
   const newGameBtn = document.getElementById("new-game-btn");
   const closeBtn = document.getElementById("close-modal");
-
   let finalMessage = "" + reason.replace(/\n/g, "<br>");
   if (!isSurrender) {
     const finalScores = calculateFinalScores();
@@ -1493,25 +1414,20 @@ function endGame(reason, isSurrender = false) {
   }
   messageEl.innerHTML = finalMessage; // ✅ Use innerHTML
   modal.hidden = false;
-
   const closeModal = () => {
     modal.hidden = true;
   };
-
   const startNewGame = () => {
     closeModal();
     resetGame();
   };
-
   newGameBtn.onclick = startNewGame;
   closeBtn.onclick = closeModal;
-
   if (isSurrender || reason.includes("manually") || reason.includes("agreement")) {
     closeBtn.focus();
   } else {
     newGameBtn.focus();
   }
-
   const handleEscape = (e) => {
     if (e.key === "Escape") {
       closeModal();
@@ -1519,57 +1435,73 @@ function endGame(reason, isSurrender = false) {
     }
   };
   document.addEventListener("keydown", handleEscape);
-
   console.log("Game Over:", reason);
   if (!isSurrender) {
     console.log("Final Scores - Red:", finalRed, "Blue:", finalBlue);
   }
 }
 
+// ================== ✅ UPDATED UNDO FUNCTION ==================
 function undoMove() {
-  if (gameOver || replayMode || currentMoveIndex <= 0) return;
-  currentMoveIndex--;
-  restoreBoardState(moveHistoryStates[currentMoveIndex]);
-  currentHistoryIndex = currentMoveIndex - 1;
-  if (currentHistoryIndex < -1) currentHistoryIndex = -1;
+  if (gameOver || replayMode) return;
+
+  // Adjust index based on game mode
+  if (gameMode === 'pvai') {
+    if (currentTurnIndex >= 1) {
+      currentTurnIndex -= 2;
+    } else {
+      currentTurnIndex = -1;
+    }
+  } else {
+    currentTurnIndex--;
+  }
+
+  if (currentTurnIndex < -1) currentTurnIndex = -1;
+
+  let targetState = null;
+  if (currentTurnIndex >= 0) {
+    const entry = turnHistory[currentTurnIndex];
+    if (entry && entry.startState) {
+      targetState = entry.startState;
+    } else {
+      console.error("Invalid turn history entry:", entry);
+      resetGame();
+      return;
+    }
+  } else {
+    // Use initial state
+    if (moveHistoryStates.length > 0 && moveHistoryStates[0]) {
+      targetState = moveHistoryStates[0];
+    } else {
+      console.warn("No initial state found. Resetting.");
+      resetGame();
+      return;
+    }
+  }
+
+  // Restore board
+  restoreBoardState(targetState);
+
+  // 🔥 CRITICAL: Reset in-progress turn tracking
+  currentTurnStartState = targetState; // The current state is now the start of a new potential turn
+  isTurnActive = false;
+  mustCaptureWithPiece = null;
+  selectedPiece = null;
+
+  // Sync move history display
+  currentHistoryIndex = currentTurnIndex;
   updateMoveHistoryDOM();
 }
 
 function redoMove() {
-  if (
-    gameOver ||
-    replayMode ||
-    currentMoveIndex >= moveHistoryStates.length - 1
-  ) {
-    return;
-  }
-  currentMoveIndex++;
-  restoreBoardState(moveHistoryStates[currentMoveIndex]);
-  currentHistoryIndex = currentMoveIndex - 1;
+  if (gameOver || replayMode || currentTurnIndex >= turnHistory.length - 1) return;
+
+  currentTurnIndex++;
+  const turnEntry = turnHistory[currentTurnIndex];
+  restoreBoardState(turnEntry.endState);
+
+  currentHistoryIndex = currentTurnIndex;
   updateMoveHistoryDOM();
-}
-
-function startReplay(speed = 1000) {
-  if (moveHistoryStates.length === 0) return;
-  replayMode = true;
-  let replayIndex = 0;
-  clearMoveHighlights();
-  replayInterval = setInterval(() => {
-    if (replayIndex >= moveHistoryStates.length) {
-      stopReplay();
-      return;
-    }
-    restoreBoardState(moveHistoryStates[replayIndex]);
-    replayIndex++;
-  }, speed);
-}
-
-function stopReplay() {
-  if (replayInterval) clearInterval(replayInterval);
-  replayMode = false;
-  if (currentMoveIndex >= 0 && currentMoveIndex < moveHistoryStates.length) {
-    restoreBoardState(moveHistoryStates[currentMoveIndex]);
-  }
 }
 
 function togglePieceTransparency() {
@@ -1586,7 +1518,6 @@ function togglePieceTransparency() {
     toggleBtn.classList.remove("active");
   }
 }
-
 function clearMoveHighlights() {
   document
     .querySelectorAll(".square.move-from, .square.move-to")
@@ -1594,32 +1525,25 @@ function clearMoveHighlights() {
       sq.classList.remove("move-from", "move-to");
     });
 }
-
 function initializeGame() {
   // ✅ 1. FIRST: Create the empty board structure
   initializeBoard(); // This populates #gameboard with .square elements
-
   // ✅ 2. THEN: Set up UI state
   const currentPlayerLabel = document.querySelector(".current-player-label");
   if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   }
-
   // ✅ 3. FINALLY: Reset game state (which places pieces on existing board)
   resetGame();
-
   const savedDepth = localStorage.getItem("aiDepth");
-  if (savedDepth && [1,2,3,4].includes(parseInt(savedDepth))) {
+  if (savedDepth && [1, 2, 3, 4].includes(parseInt(savedDepth))) {
     aiDepth = parseInt(savedDepth);
     document.getElementById("ai-difficulty").value = aiDepth;
   }
-
   // Setup controls after board exists
   setupDebugControls();
-
   localStorage.removeItem('aiDifficulty'); // Optional: reset next time
 }
-
 // Create a virtual board state from DOM
 function createVirtualBoard() {
   const board = Array(8).fill().map(() => Array(8).fill(null));
@@ -1635,7 +1559,6 @@ function createVirtualBoard() {
   });
   return board;
 }
-
 // ================== INITIALIZATION ==================
 document.addEventListener("DOMContentLoaded", () => {
   setTimeout(() => {
@@ -1653,7 +1576,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }, 0);
 });
-
 // =============== TOGGLE CONTROLS SIDEBAR ===============
 document.addEventListener("DOMContentLoaded", () => {
   const toggleBtn = document.getElementById("toggle-controls");
@@ -1669,7 +1591,6 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("controlsSidebarCollapsed", isNowCollapsed);
   });
 });
-
 // Export for testing
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
