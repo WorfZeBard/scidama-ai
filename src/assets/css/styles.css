@@ -990,7 +990,7 @@ body[data-theme="dark"] #round-time {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) scale(0.6);
+    transform: translate(-50%, -50%) scale(1.2);
     width: 80vmin;
     height: 80vmin;
     display: grid;
