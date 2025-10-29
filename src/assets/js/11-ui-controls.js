@@ -21,16 +21,14 @@ function placeInitialPieces() {
     piece.appendChild(label);
     square.appendChild(piece);
   }
-  setTimeout(() => {
-    const initialState = saveBoardState();
-    moveHistoryStates = [initialState];
-    turnHistory = [];
-    currentTurnIndex = -1;
-    currentTurnStartState = null;
-    isTurnActive = false;
-    currentHistoryIndex = -1;
-    updateMoveHistoryDOM();
-  }, 50);
+  const initialState = saveBoardState();
+  moveHistoryStates = [initialState];
+  turnHistory = [];
+  currentTurnIndex = -1;
+  currentTurnStartState = null;
+  isTurnActive = false;
+  currentHistoryIndex = -1;
+  updateMoveHistoryDOM();
 }
 
 function resetGame() {

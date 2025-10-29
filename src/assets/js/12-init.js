@@ -37,11 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   }
   
-  // Attach input handlers — move this logic HERE
   attachInputHandlers();
-
-  // Initialize game
-  initializeBoard();
   resetGame();
 
   const savedDepth = localStorage.getItem("aiDepth");

@@ -3,6 +3,14 @@ function makeKing(piece) {
   setTimeout(() => piece.classList.remove("promote"), 600);
 }
 
+function playSound(soundName) {
+  const sound = window.sounds?.[soundName];
+  if (sound) {
+    sound.currentTime = 0;
+    sound.play().catch((e) => console.log("Audio play failed:", e));
+  }
+}
+
 function performMove(piece, startRow, startCol, endRow, endCol) {
   if (gameOver || replayMode) return;
   const color = piece.classList.contains("red") ? "red" : "blue";

@@ -10,7 +10,7 @@ function attachInputHandlers() {
   const newGameboard = gameboard.cloneNode(false);
   gameboard.parentNode.replaceChild(newGameboard, gameboard);
   gameboard = newGameboard;
-
+  gameboard.replaceChildren();
   // Rebuild the board content
   initializeBoard();
 
@@ -23,7 +23,10 @@ function attachInputHandlers() {
 }
 
 function handleBoardClick(e) {
-  if (gameMode === "pvai" && currentPlayer === "blue") return;
+  if (gameMode === "pvai" && currentPlayer === "blue") {
+    console.log("Blocked: AI's turn");
+    return;
+  }
   const piece = e.target.closest(".piece");
   const square = e.target.closest(".square");
   if (!square || !square.classList.contains("playable")) return;
