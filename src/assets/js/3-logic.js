@@ -229,3 +229,52 @@ function evaluateBoardState(board, redScore, blueScore) {
   const totalBlue = blueScore + bluePieceValue;
   return totalBlue - totalRed;
 }
+
+function endGame(reason, isSurrender = false) {
+  if (gameOver) return;
+  gameOver = true;
+  if (sessionInterval) clearInterval(sessionInterval);
+  if (roundInterval) clearInterval(roundInterval);
+  playSound("gameEnd");
+  const modal = document.getElementById("game-over-modal");
+  const messageEl = document.getElementById("game-over-message");
+  const newGameBtn = document.getElementById("new-game-btn");
+  const closeBtn = document.getElementById("close-modal");
+  let finalMessage = reason.replace(/\n/g, "<br>");
+  if (!isSurrender) {
+    const finalScores = calculateFinalScores();
+    const finalRed = finalScores.red.toFixed(2);
+    const finalBlue = finalScores.blue.toFixed(2);
+    let winnerMessage = "";
+    if (finalRed < finalBlue) winnerMessage = "Red wins!";
+    else if (finalBlue < finalRed) winnerMessage = "Blue wins!";
+    else winnerMessage = "It's a draw!";
+    finalMessage += `<br><br>Final Scores:<br>Red: ${finalRed}<br>Blue: ${finalBlue}<br>${winnerMessage}`;
+  }
+  messageEl.innerHTML = finalMessage;
+  modal.hidden = false;
+  const closeModal = () => (modal.hidden = true);
+  const startNewGame = () => {
+    closeModal();
+    resetGame();
+  };
+  newGameBtn.onclick = startNewGame;
+  closeBtn.onclick = closeModal;
+  if (
+    isSurrender ||
+    reason.includes("manually") ||
+    reason.includes("agreement")
+  )
+    closeBtn.focus();
+  else newGameBtn.focus();
+  const handleEscape = (e) => {
+    if (e.key === "Escape") {
+      closeModal();
+      document.removeEventListener("keydown", handleEscape);
+    }
+  };
+  document.addEventListener("keydown", handleEscape);
+  console.log("Game Over:", reason);
+  if (!isSurrender)
+    console.log("Final Scores - Red:", finalRed, "Blue:", finalBlue);
+}

@@ -14,7 +14,9 @@ function playSound(soundName) {
 function performMove(piece, startRow, startCol, endRow, endCol) {
   if (gameOver || replayMode) return;
   const color = piece.classList.contains("red") ? "red" : "blue";
-  const pieceKey = Array.from(piece.classList).find((cls) => cls.match(/^[rb]\d+$/)) || "piece";
+  const pieceKey =
+    Array.from(piece.classList).find((cls) => cls.match(/^[rb]\d+$/)) ||
+    "piece";
   const pieceValue = parseFloat(piece.dataset.value);
   const isKing = piece.classList.contains("king");
 
@@ -212,32 +214,45 @@ function calculateFinalScores() {
 
 function checkGameOver() {
   if (gameOver) return true;
+
+  // Surrender
   if (surrenderRequested) {
     const winner = surrenderRequested === "red" ? "Blue" : "Red";
     endGame(`${winner} wins! (${surrenderRequested} surrendered)`, true);
     return true;
   }
+
   const redPieces = document.querySelectorAll(".piece.red").length;
   const bluePieces = document.querySelectorAll(".piece.blue").length;
+
+  // No pieces left
   if (redPieces === 0 || bluePieces === 0) {
     endGame("Game ended: One player has no remaining pieces.");
     return true;
   }
+
+  // Check if current player has any valid move
   if (!playerHasAnyValidMove(currentPlayer)) {
-    const winner = currentPlayer === "red" ? "Blue" : "Red";
-    endGame(`${winner} wins! (Opponent has no valid moves)`);
+    // Current player is stuck → game ends → tally all scores
+    let winnerMessage = "";
+
+    const reason = `${currentPlayer === "red" ? "Red" : "Blue"} has no legal moves.`;
+    endGame(`${reason}${winnerMessage}`);
     return true;
   }
+
+  // 3-move repetition (optional, keep if desired)
   if (
     (currentPlayer === "red" ? redPieces : bluePieces) === 1 &&
-    moveHistory.length >= 6
+    moveHistoryEntries.length >= 6
   ) {
-    const lastThree = moveHistory.slice(-3);
-    const prevThree = moveHistory.slice(-6, -3);
+    const lastThree = moveHistoryEntries.slice(-3);
+    const prevThree = moveHistoryEntries.slice(-6, -3);
     if (JSON.stringify(lastThree) === JSON.stringify(prevThree)) {
       endGame("Draw! (3-move repetition with single chip)");
       return true;
     }
   }
+
   return false;
 }

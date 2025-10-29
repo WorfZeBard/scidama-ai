@@ -23,14 +23,6 @@ document.addEventListener("DOMContentLoaded", () => {
     gameEnd: document.getElementById("game-end"),
   };
 
-  function playSound(soundName) {
-    const sound = window.sounds?.[soundName];
-    if (sound) {
-      sound.currentTime = 0;
-      sound.play().catch((e) => console.log("Audio play failed:", e));
-    }
-  }
-
   // Setup UI labels
   const currentPlayerLabel = document.querySelector(".current-player-label");
   if (currentPlayerLabel) {
