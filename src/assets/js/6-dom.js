@@ -7,7 +7,7 @@ function showErrorMessage(message) {
   setTimeout(() => (errorMessageEl.hidden = true), 5000);
 }
 
-function createBoardDOM(showPieces = false, setup = null) {
+function createBoardDOM(showPieces = true, setup = null) {
   const fragment = document.createDocumentFragment();
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {

@@ -750,25 +750,13 @@ body[data-theme="dark"] .move-history-header {
     color: white;
 }
 
-#surrender {
-    background: var(--btn-danger-bg);
-}
-
-#agree-finish {
-    background: var(--btn-success-bg);
-}
-
-#back-to-menu {
-    background: var(--btn-default-bg);
-}
-
+#surrender,
+#agree-finish,
+#back-to-menu,
+#redo,
 #undo,
-#redo {
-    background: var(--btn-info-bg);
-}
-
 #toggle-transparency {
-    background: var(--btn-purple-bg);
+    background: var(--btn-default-bg);
 }
 
 #toggle-transparency.active {

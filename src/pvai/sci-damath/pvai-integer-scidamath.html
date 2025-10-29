@@ -9,7 +9,7 @@
     />
     <title>Sci-Damath Offline - Player vs AI</title>
     <link rel="stylesheet" href="../../assets/css/styles.css" />
-    <link rel="icon" type="image/x-icon" href="../../../assets/favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="../../assets/favicon.ico" />
   </head>
   <body>
     <!-- Game Screen -->
@@ -87,13 +87,12 @@
     </main>
 
     <!-- Sounds -->
-    <div id="sounds" aria-hidden="true">
-      <audio id="move-sound" src="../../../assets/sounds/move.mp3" preload="auto"></audio>
-      <audio id="capture-sound" src="../../../assets/sounds/capture.mp3" preload="auto"></audio>
-      <audio id="move-promotion001" src="../../../assets/sounds/move-promotion001.mp3" preload="auto"></audio>
-      <audio id="game-start" src="../../../assets/sounds/game-start.mp3" preload="auto"></audio>
-      <audio id="game-end" src="../../../assets/sounds/game-end.mp3" preload="auto"></audio>
-    </div>
+  <div id="sounds" aria-hidden="true">
+    <audio id="move-sound" src="../../assets/sounds/move.mp3" preload="auto"></audio>
+    <audio id="capture-sound" src="../../assets/sounds/capture.mp3" preload="auto"></audio>
+    <audio id="move-promotion001" src="../../assets/sounds/promotion.mp3" preload="auto"></audio>
+    <audio id="game-end" src="../../assets/sounds/game-end.mp3" preload="auto"></audio>
+  </div>
 
     <!-- Confirmation Modal -->
     <div id="confirmation-modal" class="modal" hidden role="dialog" aria-labelledby="confirmation-title">
@@ -118,17 +117,17 @@
         </div>
       </div>
     </div>
-    <script src="../../assets/js/config.js"></script>
-    <script src="../../assets/js/theme.js"></script>
-    <script src="../../assets/js/state.js"></script>
-    <script src="../../assets/js/logic.js"></script>
-    <script src="../../assets/js/ai.js"></script>
-    <script src="../../assets/js/dom.js"></script>
-    <script src="../../assets/js/gameflow.js"></script>
-    <script src="../../assets/js/history.js"></script>
-    <script src="../../assets/js/input.js"></script>
-    <script src="../../assets/js/timers.js"></script>
-    <script src="../../assets/js/ui-controls.js"></script>
-    <script src="../../assets/js/init.js"></script>
+    <script src="../../assets/js/1-config.js"></script>
+    <script src="../../assets/js/2-state.js"></script>
+    <script src="../../assets/js/3-logic.js"></script>
+    <script src="../../assets/js/4-theme.js"></script>
+    <script src="../../assets/js/5-ai.js"></script>
+    <script src="../../assets/js/6-dom.js"></script>
+    <script src="../../assets/js/7-gameflow.js"></script>
+    <script src="../../assets/js/8-history.js"></script>
+    <script src="../../assets/js/9-input.js"></script>
+    <script src="../../assets/js/10-timers.js"></script>
+    <script src="../../assets/js/11-ui-controls.js"></script>
+    <script src="../../assets/js/12-init.js"></script>
   </body>
 </html>

@@ -36,6 +36,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   }
+  
+  // Attach input handlers — move this logic HERE
+  attachInputHandlers();
 
   // Initialize game
   initializeBoard();
