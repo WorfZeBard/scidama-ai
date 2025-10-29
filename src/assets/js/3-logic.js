@@ -249,7 +249,7 @@ function endGame(reason, isSurrender = false) {
     if (finalRed < finalBlue) winnerMessage = "Red wins!";
     else if (finalBlue < finalRed) winnerMessage = "Blue wins!";
     else winnerMessage = "It's a draw!";
-    finalMessage += `<br><br>Final Scores:<br>Red: ${finalRed}<br>Blue: ${finalBlue}<br>${winnerMessage}`;
+    finalMessage += `<br><br>Final Scores:<br>Red: ${finalRed}<br>Blue: ${finalBlue}<br><br>${winnerMessage}`;
   }
   messageEl.innerHTML = finalMessage;
   modal.hidden = false;

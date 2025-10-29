@@ -227,7 +227,7 @@ function checkGameOver() {
 
   // No pieces left
   if (redPieces === 0 || bluePieces === 0) {
-    endGame("Game ended: One player has no remaining pieces.");
+    endGame("One player has no remaining pieces.");
     return true;
   }
 
