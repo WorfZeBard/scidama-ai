@@ -1,21 +1,23 @@
-function logMove(moveData) {
-  if (replayMode) return;
-  const moveEntry = { ...moveData };
-  moveHistoryEntries = moveHistoryEntries.slice(0, currentHistoryIndex + 1);
-  moveHistoryEntries.push(moveEntry);
-  currentHistoryIndex++;
-  updateMoveHistoryDOM();
-}
-
-function updateMoveHistoryDOM() {
+function updateTurnHistoryDOM() {
   const historyList = document.getElementById("move-history-content");
   if (!historyList) return;
   historyList.innerHTML = "";
-  for (let i = 0; i <= currentHistoryIndex; i++) {
-    const entry = moveHistoryEntries[i];
+
+  // Flatten all moves from all turns (skip turn 0 = initial state)
+  const allMoves = [];
+  for (let i = 1; i < turnHistory.length; i++) {
+    const turn = turnHistory[i];
+    if (turn.moves && turn.moves.length > 0) {
+      allMoves.push(...turn.moves);
+    }
+  }
+
+  // Render each move
+  allMoves.forEach((entry) => {
     const moveItem = document.createElement("li");
     moveItem.className = `move-item ${entry.player}`;
     let moveText = "";
+
     if (entry.type === "capture") {
       let multiplier = 1,
         multiplierText = "×1";
@@ -50,14 +52,17 @@ function updateMoveHistoryDOM() {
         entry.value >= 0 ? "positive" : "negative"
       }">${entry.value.toFixed(2)} (×2 for each DAMA)</span>`;
     }
+
     moveItem.innerHTML = moveText;
     historyList.appendChild(moveItem);
-  }
+  });
+
   const scrollableContainer = document.querySelector(
     ".move-history-scrollable"
   );
-  if (scrollableContainer)
+  if (scrollableContainer) {
     scrollableContainer.scrollTop = scrollableContainer.scrollHeight;
+  }
 }
 
 function saveBoardState() {
@@ -75,27 +80,38 @@ function saveBoardState() {
   };
   document.querySelectorAll(".piece").forEach((piece) => {
     const square = piece.parentElement;
-    const value = piece.dataset.value;
+    const valueStr = piece.dataset.value;
+    if (valueStr == null || valueStr === "") {
+      console.warn("Piece missing dataset.value:", piece);
+      return; // skip invalid piece
+    }
+    const value = parseFloat(valueStr);
+    if (isNaN(value)) {
+      console.warn("Invalid piece value:", valueStr, piece);
+      return;
+    }
     const color = piece.classList.contains("red") ? "red" : "blue";
     let pieceKey = null;
     for (const key in PIECES) {
       if (
         PIECES[key].color === color &&
-        PIECES[key].value.toString() === value
+        PIECES[key].value === value // 👈 compare numbers, not strings
       ) {
         pieceKey = key;
         break;
       }
     }
-    if (!pieceKey)
+    if (!pieceKey) {
+      // Fallback: generate key from value (not ideal, but safe)
       pieceKey =
         color === "red" ? `r${Math.abs(value)}` : `b${Math.abs(value)}`;
+    }
     state.pieces.push({
       key: pieceKey,
       row: parseInt(square.dataset.row),
       col: parseInt(square.dataset.col),
       isKing: piece.classList.contains("king"),
-      value,
+      value: valueStr, // store original string to preserve sign/format
     });
   });
   return state;
@@ -151,40 +167,68 @@ function restoreBoardState(state) {
 
 function undoMove() {
   if (gameOver || replayMode) return;
+  if (currentTurnIndex <= 0) {
+    showErrorMessage("No moves to undo.");
+    return;
+  }
+
+  let stepsBack = 1;
   if (gameMode === "pvai") {
-    if (currentTurnIndex >= 1) currentTurnIndex -= 2;
-    else currentTurnIndex = -1;
-  } else {
-    currentTurnIndex--;
+    const lastTurn = turnHistory[currentTurnIndex]; // ✅ currentTurnIndex, not -1
+    if (lastTurn?.player === "blue") {
+      stepsBack = 2;
+    }
   }
-  if (currentTurnIndex < -1) currentTurnIndex = -1;
-  let targetState = null;
-  if (currentTurnIndex >= 0) {
-    const entry = turnHistory[currentTurnIndex];
-    targetState = entry.startState;
-  } else {
-    targetState = moveHistoryStates[0] || null;
-  }
-  if (!targetState) {
+
+  const targetIndex = currentTurnIndex - stepsBack;
+  if (targetIndex < 0) {
     resetGame();
     return;
   }
-  restoreBoardState(targetState);
-  currentTurnStartState = targetState;
+
+  restoreBoardState(turnHistory[targetIndex].endState);
+
+  if (gameMode === "pvai") {
+    currentPlayer = "red";
+    currentPlayerEl.textContent = "red";
+    const label = document.querySelector(".current-player-label");
+    if (label) label.setAttribute("data-player", "red");
+    roundEl.className = "timer timer-red";
+  }
+
+  currentTurnIndex = targetIndex;
+  currentTurnStartState = null;
   isTurnActive = false;
   mustCaptureWithPiece = null;
   selectedPiece = null;
-  currentHistoryIndex = currentTurnIndex;
-  updateMoveHistoryDOM();
+
+  updateTurnHistoryDOM();
 }
 
 function redoMove() {
   if (gameOver || replayMode || currentTurnIndex >= turnHistory.length - 1)
     return;
+
   currentTurnIndex++;
-  restoreBoardState(turnHistory[currentTurnIndex].endState);
-  currentHistoryIndex = currentTurnIndex;
-  updateMoveHistoryDOM();
+  const entry = turnHistory[currentTurnIndex];
+  restoreBoardState(entry.endState);
+
+  // Restore move index
+  if (entry.moveIds?.length > 0) {
+    const lastId = entry.moveIds[entry.moveIds.length - 1];
+    currentHistoryIndex = turnHistoryEntries.findIndex((m) => m.id === lastId);
+  } else {
+    currentHistoryIndex = -1;
+  }
+
+  currentPlayer = entry.endState.currentPlayer;
+  currentPlayerEl.textContent = currentPlayer;
+  const label = document.querySelector(".current-player-label");
+  if (label) label.setAttribute("data-player", currentPlayer);
+  roundEl.className = "timer";
+  roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
+
+  updateTurnHistoryDOM();
 }
 
 function startReplay(delay) {

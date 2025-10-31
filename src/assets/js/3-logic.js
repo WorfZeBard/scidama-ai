@@ -178,6 +178,82 @@ function playerHasAnyValidMove(color) {
   return generateAllMoves(board, color).length > 0;
 }
 
+function placeInitialPieces() {
+  document.querySelectorAll(".piece").forEach((p) => p.remove());
+  const setup = debugMode ? DEBUG_SETUP : INITIAL_SETUP;
+  for (const pos in setup) {
+    const [row, col] = pos.split(",").map(Number);
+    const pieceKey = setup[pos];
+    const pieceData = PIECES[pieceKey];
+    if (!pieceData) continue;
+    const square = document.querySelector(
+      `.square[data-row='${row}'][data-col='${col}']`
+    );
+    if (!square || !square.classList.contains("playable")) continue;
+    const piece = document.createElement("div");
+    piece.classList.add("piece", pieceData.color);
+    piece.setAttribute("tabindex", "0");
+    piece.draggable = true;
+    piece.dataset.value = pieceData.value;
+    const label = document.createElement("span");
+    label.classList.add("piece-number");
+    label.textContent = pieceData.value;
+    piece.appendChild(label);
+    square.appendChild(piece);
+  }
+  setTimeout(() => {
+    const initialState = saveBoardState();
+    // ✅ Add initial state as turn 0
+    turnHistory = [
+      {
+        player: null,
+        startState: null,
+        endState: initialState,
+      },
+    ];
+    currentTurnIndex = 0; // now 0 = initial state
+    currentTurnStartState = null;
+    isTurnActive = false;
+    currentHistoryIndex = -1;
+    updateTurnHistoryDOM();
+  }, 50);
+}
+
+
+function calculateFinalScores() {
+  const redPieces = document.querySelectorAll(".piece.red");
+  const bluePieces = document.querySelectorAll(".piece.blue");
+  let redRemaining = 0,
+    blueRemaining = 0;
+  redPieces.forEach((piece) => {
+    const val = parseFloat(piece.dataset.value);
+    const mult = piece.classList.contains("king") ? 2 : 1;
+    redRemaining += val * mult;
+  });
+  bluePieces.forEach((piece) => {
+    const val = parseFloat(piece.dataset.value);
+    const mult = piece.classList.contains("king") ? 2 : 1;
+    blueRemaining += val * mult;
+  });
+  redScore += redRemaining;
+  blueScore += blueRemaining;
+  if (redRemaining !== 0) {
+    currentTurnMoveIds.push({
+      type: "final-tally",
+      player: "red",
+      value: redRemaining,
+    });
+  }
+  if (blueRemaining !== 0) {
+    currentTurnMoveIds.push({
+      type: "final-tally",
+      player: "blue",
+      value: blueRemaining,
+    });
+  }
+  return { red: redScore, blue: blueScore };
+}
+
 function calculateSciDamathScore(capturingPiece, capturedPiece, operator) {
   const capturingValue = parseFloat(capturingPiece.dataset.value);
   const capturedValue = parseFloat(capturedPiece.dataset.value);
@@ -230,6 +306,36 @@ function evaluateBoardState(board, redScore, blueScore) {
   return totalBlue - totalRed;
 }
 
+function resetGame() {
+  redScore = 0.0;
+  blueScore = 0.0;
+  redScoreEl.textContent = "0.00";
+  blueScoreEl.textContent = "0.00";
+  currentPlayer = "red";
+  currentPlayerEl.textContent = "red";
+  mustCaptureWithPiece = null;
+  selectedPiece = null;
+  nextMoveId = 0;
+  currentTurnMoveIds = [];
+  turnHistory = [];
+  currentTurnIndex = -1;
+  currentTurnStartState = null;
+  gameOver = false;
+  if (sessionInterval) clearInterval(sessionInterval);
+  if (roundInterval) clearInterval(roundInterval);
+  timersStarted = false;
+  sessionMinutes = 20;
+  sessionSeconds = 0;
+  roundMinutes = 1;
+  roundSeconds = 0;
+  updateTimerDisplay();
+  currentMoveIndex = -1;
+  replayMode = false;
+  if (replayInterval) clearInterval(replayInterval);
+  if (errorMessageEl) errorMessageEl.hidden = true;
+  placeInitialPieces();
+}
+
 function endGame(reason, isSurrender = false) {
   if (gameOver) return;
   gameOver = true;
@@ -242,9 +348,9 @@ function endGame(reason, isSurrender = false) {
   const closeBtn = document.getElementById("close-modal");
   let finalMessage = reason.replace(/\n/g, "<br>");
   if (!isSurrender) {
-    const finalScores = calculateFinalScores();
-    const finalRed = finalScores.red.toFixed(2);
-    const finalBlue = finalScores.blue.toFixed(2);
+    finalScores = calculateFinalScores();
+    finalRed = finalScores.red.toFixed(2);
+    finalBlue = finalScores.blue.toFixed(2);
     let winnerMessage = "";
     if (finalRed < finalBlue) winnerMessage = "Red wins!";
     else if (finalBlue < finalRed) winnerMessage = "Blue wins!";
@@ -274,7 +380,192 @@ function endGame(reason, isSurrender = false) {
     }
   };
   document.addEventListener("keydown", handleEscape);
-  console.log("Game Over:", reason);
-  if (!isSurrender)
-    console.log("Final Scores - Red:", finalRed, "Blue:", finalBlue);
+}
+
+function logMove(moveData) {
+  if (replayMode) return null;
+  return nextMoveId++; // just return ID; no DOM logging
+}
+
+function switchTurn() {
+  mustCaptureWithPiece = null;
+  currentPlayer = currentPlayer === "red" ? "blue" : "red";
+  currentPlayerEl.textContent = currentPlayer;
+  const currentPlayerLabel = document.querySelector(".current-player-label");
+  if (currentPlayerLabel)
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  if (roundInterval) clearInterval(roundInterval);
+  roundMinutes = 1;
+  roundSeconds = 0;
+  roundEl.className = "timer";
+  roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
+  startRoundTimer();
+
+  // ✅ Record turn history HERE — only once per full turn
+  const lastPlayer = currentPlayer === "blue" ? "red" : "blue";
+  const currentState = saveBoardState();
+  const turnEntry = {
+    player: lastPlayer,
+    endState: currentState,
+  };
+  turnHistory = turnHistory.slice(0, currentTurnIndex + 1);
+  turnHistory.push(turnEntry);
+  currentTurnIndex++;
+
+  if (gameMode === "pvai" && currentPlayer === "blue") {
+    setTimeout(() => makeAIMove(), 750);
+  }
+}
+
+function performMove(piece, startRow, startCol, endRow, endCol) {
+  if (gameOver || replayMode) return;
+
+  const color = piece.classList.contains("red") ? "red" : "blue";
+  const pieceKey =
+    Array.from(piece.classList).find((cls) => cls.match(/^[rb]\d+$/)) ||
+    "piece";
+  const pieceValue = parseFloat(piece.dataset.value);
+  const isKing = piece.classList.contains("king");
+
+  const board = createLogicalBoard();
+  const allMoves = generateAllMoves(board, color);
+  const matchingMove = allMoves.find(
+    (m) =>
+      m.startRow === startRow &&
+      m.startCol === startCol &&
+      m.endRow === endRow &&
+      m.endCol === endCol
+  );
+  if (!matchingMove) return;
+
+  let capturedPieces = [];
+  if (matchingMove.isCapture) {
+    capturedPieces = matchingMove.captured
+      .map(([r, c]) => {
+        const sq = document.querySelector(
+          `.square[data-row='${r}'][data-col='${c}']`
+        );
+        return sq ? sq.querySelector(".piece") : null;
+      })
+      .filter((p) => p);
+  }
+
+  let scoreChange = 0;
+  if (capturedPieces.length > 0) {
+    const capturedPiece = capturedPieces[0];
+    const operator = DAMATH_LAYOUT[endRow][endCol];
+    scoreChange = calculateSciDamathScore(piece, capturedPiece, operator);
+    if (color === "red") redScore += scoreChange;
+    else blueScore += scoreChange;
+    redScoreEl.textContent = redScore.toFixed(2);
+    blueScoreEl.textContent = blueScore.toFixed(2);
+    playSound("capture");
+    const moveData = {
+      type: "capture",
+      player: color,
+      piece: pieceKey,
+      capturingValue: parseFloat(piece.dataset.value),
+      operator,
+      capturedValue: parseFloat(capturedPiece.dataset.value),
+      result: scoreChange,
+      isCapturingKing: piece.classList.contains("king"),
+      isCapturedKing: capturedPiece.classList.contains("king"),
+    };
+    currentTurnMoveIds.push(moveData);
+    capturedPieces.forEach((p) => p.remove());
+  } else {
+    playSound("move");
+    const moveData = {
+      type: "move",
+      player: color,
+      piece: pieceKey,
+      value: pieceValue,
+      endRow,
+      endCol,
+    };
+    currentTurnMoveIds.push(moveData);
+  }
+
+  const endSq = document.querySelector(
+    `.square[data-row='${endRow}'][data-col='${endCol}']`
+  );
+  endSq.appendChild(piece);
+
+  let wasPromoted = false;
+  if (!isKing) {
+    if (
+      (color === "red" && endRow === 0) ||
+      (color === "blue" && endRow === 7)
+    ) {
+      makeKing(piece);
+      wasPromoted = true;
+    }
+  }
+  if (wasPromoted) {
+    playSound("promotion");
+    const moveData = {
+      type: "promotion",
+      player: color,
+      piece: pieceKey,
+    };
+    currentTurnMoveIds.push(moveData);
+  }
+
+  let turnEnded = false;
+  if (wasPromoted) {
+    mustCaptureWithPiece = null;
+    switchTurn();
+    turnEnded = true;
+  } else if (capturedPieces.length > 0) {
+    setTimeout(() => {
+      const newBoard = createLogicalBoard();
+      const landedPiece = newBoard[endRow][endCol];
+      if (landedPiece && landedPiece.color === color) {
+        const furtherCaptures = getImmediateCaptures(
+          newBoard,
+          endRow,
+          endCol,
+          landedPiece
+        );
+        if (furtherCaptures.length > 0) {
+          mustCaptureWithPiece = piece;
+          if (gameMode === "pvai" && color === "blue") {
+            setTimeout(() => {
+              performMove(
+                piece,
+                furtherCaptures[0].startRow,
+                furtherCaptures[0].startCol,
+                furtherCaptures[0].endRow,
+                furtherCaptures[0].endCol
+              );
+            }, 500);
+          }
+        } else {
+          mustCaptureWithPiece = null;
+          switchTurn();
+          turnEnded = true;
+        }
+      } else {
+        mustCaptureWithPiece = null;
+        switchTurn();
+        turnEnded = true;
+      }
+    }, 0);
+  } else {
+    mustCaptureWithPiece = null;
+    switchTurn();
+    turnEnded = true;
+  }
+
+  if (!replayMode) highlightMoveSquares(startRow, startCol, endRow, endCol);
+  clearValidMoves();
+
+  if (!timersStarted) {
+    timersStarted = true;
+    startSessionTimer();
+    startRoundTimer();
+    playSound("gameStart");
+  }
+
+  setTimeout(() => checkGameOver(), 100);
 }

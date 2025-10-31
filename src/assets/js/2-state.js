@@ -12,13 +12,13 @@ let redScore = 0.0;
 let blueScore = 0.0;
 let currentPlayer = "red";
 let selectedPiece = null;
-let moveHistoryEntries = [];
+let currentTurnMoveIds = [];
+let nextMoveId = 0;
 let turnHistory = [];
-let currentHistoryIndex = -1;
-let currentTurnIndex = -1;
+let turnHistoryEntries = [];
+let currentTurnIndex = 0;
 let currentTurnStartState = null;
 let isTurnActive = false;
-let moveHistory = [];
 let surrenderRequested = null;
 let sessionMinutes = 20;
 let sessionSeconds = 0;
@@ -32,6 +32,6 @@ let replayMode = false;
 let replayInterval = null;
 let gameOver = false;
 let piecesTransparent = false;
-
-// For undo/redo
-let moveHistoryStates = [];
+let finalScores = 0.0;
+let finalRed = 0.0;
+let finalBlue = 0.0;

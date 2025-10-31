@@ -24,7 +24,6 @@ function attachInputHandlers() {
 
 function handleBoardClick(e) {
   if (gameMode === "pvai" && currentPlayer === "blue") {
-    console.log("Blocked: AI's turn");
     return;
   }
   const piece = e.target.closest(".piece");
