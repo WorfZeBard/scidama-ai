@@ -12,6 +12,8 @@
     --color-blue-border: #0d3a66;
     --color-blue-bg: #d1ecf1;
     --color-blue-text: #083944;
+    --menu-title-color: #707070;
+    /* Your preferred light-mode title color (e.g., black) */
 
     --color-success: #27ae60;
     --color-success-bg: rgba(46, 204, 113, 0.2);
@@ -31,6 +33,9 @@
 
     /* Animation control */
     --animation-play-state: running;
+
+    --operator-color: #2c3e50;
+    /* Dark gray for light mode */
 }
 
 /* ================== THEME VARIABLES ================== */
@@ -60,10 +65,16 @@
     --text-muted: #aaaaaa;
     --border-color: #444444;
     --board-border: #555555;
+    --square-light: #d4c19c;
+    --square-dark: #4a6b30;
     --symbol-light: rgba(0, 0, 0, 0.8);
     --symbol-dark: rgba(255, 255, 255, 0.9);
     --scrollbar-track: #2a2a2a;
     --scrollbar-thumb: #555555;
+    --operator-color: #f5f7fa;
+    /* Light gray/white for dark mode */
+    --menu-title-color: #f5f7fa;
+    /* Lighter blue for dark mode */
 }
 
 /* ================== GENERAL PAGE ================== */
@@ -142,9 +153,12 @@ h3 {
 
 /* ================== GAME SCREEN ================== */
 .game-screen {
-    display: none;
+    display: block;
     width: 100%;
-    height: 100%;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
 .game-screen:not([hidden]) {
@@ -154,11 +168,11 @@ h3 {
 /* ================== MAIN GAME LAYOUT ================== */
 .game-container {
     display: flex;
+    flex-direction: column;
     width: 100%;
-    height: 100%;
+    min-height: 100%;
     padding: 10px;
     box-sizing: border-box;
-    overflow: hidden;
 }
 
 /* --- DEBUG SIDEBAR (Pinned Left) --- */
@@ -247,34 +261,31 @@ h3 {
     flex: 1;
     display: flex;
     justify-content: center;
-    align-items: flex-start;
-    min-width: 0;
-    padding-left: 16px;
+    align-items: center;
+    padding: 0;
+    width: 100%;
+    height: 100%;
 }
 
 .game-layout {
     display: grid;
-    /* Use fr units for sidebars to hug the board */
     grid-template-columns: minmax(200px, 240px) 1fr minmax(200px, 240px);
-    gap: 12px;
-    /* Small, consistent gap */
-    max-width: 1400px;
     width: 100%;
+    max-width: 1200px;
     height: 100%;
     box-sizing: border-box;
     justify-items: center;
-    /* Center columns within container */
+    min-width: 0;
 }
 
 /* ================== SIDEBARS & BOARD ================== */
 .sidebar {
-    display: flex;
+    display: flexbox;
     flex-direction: column;
     gap: 15px;
     width: 100%;
-    /* Let grid control width */
-    min-width: 200px;
-    max-width: 240px;
+    min-width: 180px;
+    max-width: 200px;
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -287,8 +298,12 @@ h3 {
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(8, 1fr);
     aspect-ratio: 1 / 1;
-    max-width: 70vh;
-    max-height: 70vh;
+    width: 95vmin;
+    max-width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    /* margin: 0 auto; */
+    font-size: calc(1rem + 1vmin);
     transition: all 0.2s ease;
     user-select: none;
 }
@@ -296,21 +311,18 @@ h3 {
 /* ================== SCOREBOARD ================== */
 .scoreboard {
     display: flex;
-    gap: 40px;
-    margin-bottom: 15px;
+    gap: 20px;
+    margin-bottom: 25px;
     flex-wrap: wrap;
     justify-content: center;
 }
 
 .score {
-    padding: 10px 20px;
+    padding: 10px 20px 10px 20px;
     border-radius: 8px;
     text-align: center;
     font-size: 1.2em;
     min-width: 120px;
-    /* Use fixed text colors for readability in both modes */
-    color: white;
-    /* Always white text */
     font-weight: bold;
 }
 
@@ -409,7 +421,6 @@ h3 {
     text-align: center;
     padding: 8px 12px;
     border-radius: 6px;
-    margin-top: 10px;
     transition: all 0.3s ease;
     color: var(--text-primary);
 }
@@ -444,6 +455,7 @@ h3 {
 }
 
 .square.dark {
+    background: var(--square-dark);
     pointer-events: none;
     opacity: 0.5;
     cursor: default;
@@ -461,7 +473,7 @@ h3 {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 2.4rem;
+    font-size: calc(1.8rem + 0.6vmin);
     font-weight: 900;
     color: var(--symbol-light);
     pointer-events: none;
@@ -491,6 +503,8 @@ h3 {
     font-weight: bold;
     color: #fff;
     transform: none;
+    /* Scales with zoom, but never smaller than 12px equivalent */
+    /* font-size: clamp(1rem, 2rem, 80rem); */
 }
 
 .piece.red {
@@ -508,11 +522,12 @@ h3 {
 .piece-number {
     pointer-events: none;
     z-index: 2;
-    font-size: 1.1em;
+    font-size: 0.85em;
+    /* ~0.935rem at default — clear and readable */
     text-shadow:
         1px 1px 2px rgba(0, 0, 0, 0.8),
         -1px -1px 2px rgba(255, 255, 255, 0.3);
-    font-weight: 900;
+    font-weight: bold;
 }
 
 .piece.king {
@@ -666,7 +681,7 @@ body[data-theme="dark"] .move-history-header {
 
 .operator {
     font-weight: bold;
-    color: whitesmoke;
+    color: var(--operator-color);
     margin: 0 4px;
 }
 
@@ -735,21 +750,13 @@ body[data-theme="dark"] .move-history-header {
     color: white;
 }
 
-#surrender {
-    background: var(--btn-danger-bg);
-}
-
-#agree-finish {
-    background: var(--btn-success-bg);
-}
-
+#surrender,
+#agree-finish,
+#back-to-menu,
+#redo,
 #undo,
-#redo {
-    background: var(--btn-info-bg);
-}
-
 #toggle-transparency {
-    background: var(--btn-purple-bg);
+    background: var(--btn-default-bg);
 }
 
 #toggle-transparency.active {
@@ -783,6 +790,13 @@ body[data-theme="dark"] #toggle-dark-mode {
     }
 }
 
+button:focus,
+.toggle-controls-btn:focus,
+.btn-link:focus {
+    outline: 2px solid var(--color-blue);
+    outline-offset: 2px;
+}
+
 .piece.transparent {
     opacity: 0.4;
     background: rgba(0, 0, 0, 0.1) !important;
@@ -798,40 +812,35 @@ body[data-theme="dark"] #toggle-dark-mode {
 
 /* ================== RESPONSIVE DESIGN ================== */
 @media (max-width: 900px) {
-    .controls-sidebar {
-        display: none !important;
-    }
-
-    .centered-game-content {
-        padding-left: 0;
-    }
-
     .game-layout {
         grid-template-columns: 1fr;
         grid-template-rows: auto auto 1fr auto;
-        max-width: none;
-    }
-
-    .sidebar {
-        width: 100% !important;
-        min-width: auto !important;
-        max-width: none !important;
+        grid-template-areas:
+            "stats"
+            "board"
+            "actions";
+        height: auto;
+        min-height: 100%;
     }
 
     #gameboard {
-        max-width: 90vw;
-        max-height: 90vw;
+        display: grid;
+        grid-area: board;
+        width: min(90vmin, 90vw);
+        height: auto;
+        margin: 50px 0px 30px 0px;
     }
 
-    .timers {
-        font-size: 1em;
-        gap: 15px;
+    .sidebar {
+        width: 50% !important;
+        height: 100% !important;
+        max-width: none !important;
+        margin: 1px 0 0 0;
+        padding-bottom: 20px;
     }
 
-    .score {
-        font-size: 1em;
-        padding: 6px 12px;
-        min-width: 90px;
+    .pieces {
+        font-size: 10px;
     }
 }
 
@@ -867,34 +876,27 @@ body[data-theme="dark"] {
     color: #f0f0f0;
 }
 
-/* Game screen background */
 body[data-theme="dark"] .game-screen {
     background: #121212;
 }
 
-/* Sidebars and controls */
 body[data-theme="dark"] .controls-sidebar,
-body[data-theme="dark"] .stats-sidebar,
-body[data-theme="dark"] .actions-sidebar,
-body[data-theme="dark"] #game-controls {
+body[data-theme="dark"] .sidebar {
     background: #1e1e1e;
     border-color: #444;
     color: #f0f0f0;
 }
 
-/* Timers & labels */
 body[data-theme="dark"] .timer-label,
 body[data-theme="dark"] .current-player-label {
     color: #f0f0f0;
 }
 
-/* Game status */
 body[data-theme="dark"] .game-status {
     color: #f0f0f0;
     border-color: #555;
 }
 
-/* Move history (you already have this — keep it) */
 body[data-theme="dark"] #move-history {
     background: #1e1e1e;
     border-color: #555;
@@ -911,42 +913,20 @@ body[data-theme="dark"] .move-item {
     color: #f0f0f0;
 }
 
-/* Buttons (optional: make default buttons slightly darker in dark mode) */
-body[data-theme="dark"] #game-controls button,
-body[data-theme="dark"] .action-buttons button:not(#toggle-dark-mode) {
+body[data-theme="dark"] .action-buttons button:not(#toggle-dark-mode) game-theme-select {
     background: linear-gradient(145deg, #5a5a5a, #3a3a3a);
     color: white;
     border-color: #555;
 }
 
-/* Timer numbers */
 body[data-theme="dark"] #session-time,
 body[data-theme="dark"] #round-time {
     color: #ffffff !important;
 }
 
-/* ================== LAYOUT TWEAKS ================== */
-.game-layout {
-    display: grid;
-    grid-template-columns: minmax(200px, 240px) 1fr minmax(200px, 240px);
-    gap: 12px;
-    max-width: 1400px;
-    width: 100%;
-    height: 100%;
-    box-sizing: border-box;
-    justify-items: center;
-}
-
-.sidebar {
-    width: 100%;
-    min-width: 200px;
-    max-width: 240px;
-}
-
 /* ================== PIECE NUMBER SCALING ================== */
 .piece-number {
     font-size: 0.8em;
-    /* Scales with piece size, not zoom */
 }
 
 /* ================== PRINT STYLES ================== */
@@ -958,6 +938,7 @@ body[data-theme="dark"] #round-time {
     body {
         background: white !important;
         color: black !important;
+        font-size: calc(0.8rem + 0.2vw);
     }
 
     .piece {
@@ -997,7 +978,7 @@ body[data-theme="dark"] #round-time {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) scale(0.6);
+    transform: translate(-50%, -50%) scale(1.2);
     width: 80vmin;
     height: 80vmin;
     display: grid;
@@ -1041,7 +1022,7 @@ body[data-theme="dark"] .menu-content {
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    background: var(--btn-menu-bg);
+    background: var(--btn-mod-bg);
     color: white;
     transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -1064,7 +1045,6 @@ body[data-theme="dark"] .menu-content {
     margin-top: 20px;
 }
 
-/* Reusable button link */
 .btn-link {
     display: inline-block;
     padding: 8px 12px;
@@ -1077,36 +1057,6 @@ body[data-theme="dark"] .menu-content {
     transition: all 0.2s ease;
 }
 
-/* ================== BOARD: ALWAYS LIGHT MODE ================== */
-/* Squares */
-.square.light {
-    background: #f0e6c8 !important;
-    opacity: 0.9 !important;
-}
-
-.square.dark {
-    background: #5d8a3d !important;
-    opacity: 0.5 !important;
-}
-
-/* Symbols */
-.symbol {
-    color: rgba(0, 0, 0, 0.6) !important;
-}
-
-.square.dark .symbol {
-    color: rgba(255, 255, 255, 0.6) !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5) !important;
-}
-
-/* Pieces (optional: keep as-is, but ensure text is readable) */
-.piece-number {
-    text-shadow:
-        1px 1px 2px rgba(0, 0, 0, 0.8),
-        -1px -1px 2px rgba(255, 255, 255, 0.3) !important;
-}
-
-/* ================== MODAL STYLES ================== */
 /* ================== MODAL STYLES ================== */
 .modal {
     position: fixed;
@@ -1121,25 +1071,95 @@ body[data-theme="dark"] .menu-content {
     z-index: 1000;
 }
 
-/* 👇 CRITICAL: Hide modals properly */
 .modal[hidden] {
     display: none !important;
 }
+
 .modal-content {
-    background: rgba(255, 255, 255, 0.95);
-    padding: 30px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    padding: 24px;
     border-radius: 12px;
-    max-width: 500px;
-    width: 90%;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     backdrop-filter: blur(10px);
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
 }
 
 .modal-content h2 {
-    margin: 0 0 20px 0;
-    color: #333;
-    text-align: center;
+    margin: 0 0 20px;
     font-size: 1.8em;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+/* ================== MODAL CLOSE BUTTONS ================== */
+.modal-close {
+    background: var(--btn-default-bg);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    width: 100%;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.modal-close:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.modal-close:focus {
+    outline: 2px solid var(--color-blue);
+    outline-offset: 2px;
+}
+
+
+.difficulty-options {
+    display: grid;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.difficulty-btn {
+    padding: 12px;
+    font-size: 1em;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: var(--btn-mod-bg);
+    color: white;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.difficulty-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn-primary {
+    background: var(--btn-mod-bg);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: transform 0.2s;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
 }
 
 .variant-buttons {
@@ -1156,7 +1176,7 @@ body[data-theme="dark"] .menu-content {
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    background: linear-gradient(145deg, #4a90e2, #357abd);
+    background: var(--btn-mod-bg);
     color: white;
     transition: transform 0.2s, box-shadow 0.2s;
     text-align: center;
@@ -1175,31 +1195,6 @@ body[data-theme="dark"] .menu-content {
     box-shadow: none;
 }
 
-.modal-close {
-    padding: 10px 20px;
-    font-size: 1em;
-    font-weight: bold;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    background: linear-gradient(145deg, #6c757d, #495057);
-    color: white;
-    width: 100%;
-    transition: transform 0.2s;
-}
-
-.modal-close:hover {
-    transform: translateY(-1px);
-}
-
-/* Options Styles */
-.options-content {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    margin-bottom: 20px;
-}
-
 .option-group {
     display: flex;
     flex-direction: column;
@@ -1208,42 +1203,53 @@ body[data-theme="dark"] .menu-content {
 
 .option-group label {
     font-weight: bold;
-    color: #333;
 }
 
-.option-group input[type="range"] {
-    width: 100%;
-}
-
+.option-group input[type="range"],
 .option-group select {
+    width: 100%;
     padding: 8px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
-    background: white;
+    background: var(--bg-surface);
+    color: var(--text-primary);
 }
 
 .option-group input[type="checkbox"] {
     margin-right: 8px;
 }
 
-/* Menu button specific styles */
 #btn-pvp {
-    background: linear-gradient(145deg, #27ae60, #219653);
+    background: var(--btn-success-bg);
 }
 
 #btn-pvai {
-    background: linear-gradient(145deg, #3498db, #2980b9);
+    background: var(--btn-info-bg);
 }
 
 #btn-options {
-    background: linear-gradient(145deg, #9b59b6, #8e44ad);
+    background: var(--btn-purple-bg);
 }
 
 #btn-debug {
-    background: linear-gradient(145deg, #e74c3c, #c0392b);
+    background: var(--btn-danger-bg);
 }
 
-.menu-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+#game-over-message {
+    white-space: pre-line;
+    /* Alternative if you prefer textContent */
+    text-align: center;
+    line-height: 1.6;
+}
+
+#theme-select {
+    margin-bottom: 30px;
+}
+
+#menu-title {
+    color: var(--menu-title-color);
+}
+
+#menu-title[data-theme="dark"] {
+    color: white;
 }

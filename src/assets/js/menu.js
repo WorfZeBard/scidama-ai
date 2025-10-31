@@ -36,137 +36,101 @@ function createMenuBoard() {
   }
 }
 
-// Close any open modal
 function closeModal() {
   document.querySelectorAll('.modal').forEach(modal => {
     modal.hidden = true;
   });
 }
 
-// Open a specific modal
 function openModal(modalId) {
   closeModal();
   const modal = document.getElementById(modalId);
   if (modal) modal.hidden = false;
 }
 
-// Set up event listeners
-document.addEventListener('DOMContentLoaded', () => {
-  createMenuBoard();
-  
-  // Main menu buttons
-  document.getElementById('btn-pvp')?.addEventListener('click', () => openModal('pvp-modal'));
-  document.getElementById('btn-pvai')?.addEventListener('click', () => openModal('pvai-modal'));
-  document.getElementById('btn-options')?.addEventListener('click', () => openModal('options-modal'));
-  document.getElementById('btn-debug')?.addEventListener('click', () => {
-    window.location.href = '../debug_mode/debug_mode.html';
-  });
-
-  // ✅ EVENT DELEGATION: Works for ALL .modal-close buttons, even in hidden modals
-  document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal-close')) {
-      closeModal();
-    }
-  });
-
-  // Rest of your code (variant selection, options, etc.)
-});
-
-// Set up event listeners AFTER DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
   createMenuBoard();
 
-  // Main menu buttons
-  document
-    .getElementById("btn-pvp")
-    ?.addEventListener("click", () => openModal("pvp-modal"));
-  document
-    .getElementById("btn-pvai")
-    ?.addEventListener("click", () => openModal("pvai-modal"));
-  document
-    .getElementById("btn-options")
-    ?.addEventListener("click", () => openModal("options-modal"));
+  // === Main Menu Buttons ===
+  document.getElementById("btn-pvp")?.addEventListener("click", () => openModal("pvp-modal"));
+  document.getElementById("btn-pvai")?.addEventListener("click", () => openModal("pvai-modal"));
+  document.getElementById("btn-options")?.addEventListener("click", () => openModal("options-modal"));
   document.getElementById("btn-debug")?.addEventListener("click", () => {
     window.location.href = "debug_mode/debug_mode.html";
   });
 
-  // Handle ALL close buttons (including dynamically added ones)
+  // === Modal Close Buttons (Delegated) ===
   document.addEventListener("click", (e) => {
     if (e.target.classList.contains("modal-close")) {
       closeModal();
     }
   });
 
-  // Variant selection
+  // === Variant Selection ===
   document.addEventListener("click", (e) => {
-    if (
-      e.target.classList.contains("variant-btn") &&
-      e.target.dataset.variant
-    ) {
+    if (e.target.classList.contains("variant-btn") && e.target.dataset.variant) {
       const variant = e.target.dataset.variant;
+
       if (variant === "integer") {
         window.location.href = "pvp/sci-damath/pvp-integer-scidamath.html";
       } else if (variant === "integer-ai") {
-        window.location.href = "pvai/sci-damath/pvai-integer-scidamath.html";
+        openModal("difficulty-modal");
+
+        const handleDifficulty = (event) => {
+          if (event.target.classList.contains("difficulty-btn")) {
+            const difficulty = event.target.dataset.difficulty;
+            localStorage.setItem("aiDifficulty", difficulty);
+            window.location.href = "pvai/sci-damath/pvai-integer-scidamath.html";
+            document.removeEventListener("click", handleDifficulty); // Cleanup
+          }
+        };
+        document.addEventListener("click", handleDifficulty);
       }
     }
   });
 
-  // Options handling
-  const soundVolume = document.getElementById("sound-volume");
+  // === Theme Handling ===
   const themeSelect = document.getElementById("theme-select");
-  const enableSounds = document.getElementById("enable-sounds");
-  const enableNotifications = document.getElementById("enable-notifications");
 
-  // Load saved options
-  const savedOptions = JSON.parse(
-    localStorage.getItem("sciDamathOptions") || "{}"
-  );
-  if (savedOptions.soundVolume !== undefined)
-    soundVolume.value = savedOptions.soundVolume;
-  if (savedOptions.theme) themeSelect.value = savedOptions.theme;
-  if (savedOptions.enableSounds !== undefined)
-    enableSounds.checked = savedOptions.enableSounds;
-  if (savedOptions.enableNotifications !== undefined)
-    enableNotifications.checked = savedOptions.enableNotifications;
-
-  // Save options on change
-  function saveOptions() {
-    const options = {
-      soundVolume: parseInt(soundVolume.value),
-      theme: themeSelect.value,
-      enableSounds: enableSounds.checked,
-      enableNotifications: enableNotifications.checked,
-    };
-    localStorage.setItem("sciDamathOptions", JSON.stringify(options));
+  // Load saved theme
+  const savedOptions = JSON.parse(localStorage.getItem("sciDamathOptions") || "{}");
+  if (savedOptions.theme) {
+    themeSelect.value = savedOptions.theme;
   }
 
-  // Use event delegation for options (in case they're in modal)
-  document.addEventListener("change", (e) => {
-    if (
-      e.target.id === "sound-volume" ||
-      e.target.id === "theme-select" ||
-      e.target.id === "enable-sounds" ||
-      e.target.id === "enable-notifications"
-    ) {
-      saveOptions();
+  // Apply theme to the document
+  function applyTheme(themeValue) {
+    if (themeValue === "system") {
+      // Match system preference
+      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.body.setAttribute("data-theme", isDark ? "dark" : "light");
+    } else {
+      // Use selected theme
+      document.body.setAttribute("data-theme", themeValue);
+    }
+  }
+
+  // Save and apply theme
+  function saveAndApplyTheme() {
+    const themeValue = themeSelect.value;
+    const options = { theme: themeValue };
+    localStorage.setItem("sciDamathOptions", JSON.stringify(options));
+    applyTheme(themeValue);
+  }
+
+  // Listen for theme changes
+  themeSelect?.addEventListener("change", saveAndApplyTheme);
+
+  // Apply theme on initial load
+  applyTheme(themeSelect?.value || "light");
+
+  // Optional: Update theme if system preference changes (only when "system" is selected)
+  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  mediaQuery.addEventListener("change", (e) => {
+    const saved = JSON.parse(localStorage.getItem("sciDamathOptions") || "{}");
+    if (saved.theme === "system") {
+      document.body.setAttribute("data-theme", e.matches ? "dark" : "light");
     }
   });
 
-  // Apply theme from options
-  const currentTheme = themeSelect?.value || "light";
-  if (
-    currentTheme === "dark" ||
-    (currentTheme === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches)
-  ) {
-    document.body.setAttribute("data-theme", "dark");
-  }
-
-  // Skip link focus management
-  const skipLink = document.querySelector(".skip-link");
-  skipLink?.addEventListener("click", () => {
-    const main = document.getElementById("main-menu");
-    main?.focus();
-  });
 });
