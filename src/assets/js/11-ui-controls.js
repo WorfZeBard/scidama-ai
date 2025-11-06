@@ -27,12 +27,91 @@ function setupDebugControls() {
   const backToMenuBtn = document.getElementById("back-to-menu");
   const darkModeBtn = document.getElementById("toggle-dark-mode");
   const difficultySelect = document.getElementById("ai-difficulty");
+  const rotateBtn = document.getElementById("rotate-board-180");
+  const boardWrapper = document.querySelector(".board-wrapper");
+
+  if (rotateBtn && boardWrapper) {
+    rotateBtn.addEventListener("click", () => {
+      boardWrapper.classList.toggle("rotated");
+      // Optional: update button text
+      rotateBtn.textContent = boardWrapper.classList.contains("rotated")
+        ? "Unrotate Board"
+        : "Rotate Board";
+    });
+  }
 
   if (difficultySelect) {
     difficultySelect.addEventListener("change", (e) => {
-      aiDepth = parseInt(e.target.value);
-      localStorage.setItem("aiDepth", aiDepth);
+      const newDepth = parseInt(e.target.value, 10);
+      window.aiDepth = newDepth; // ✅ set global
+      localStorage.setItem("aiDepth", String(newDepth)); // ✅ store as string
+
+      const difficultyDisplay = document.getElementById(
+        "ai-difficulty-display"
+      );
+      if (difficultyDisplay) {
+        const labels = { 2: "Easy", 3: "Medium", 4: "Hard", 6: "Expert" };
+        difficultyDisplay.textContent = labels[newDepth] || "Custom";
+      }
+
+      // Also sync the <select> element itself (optional but good)
+      difficultySelect.value = newDepth;
     });
+  }
+
+  // Rotate board 180 degrees (for debugging / opponent view)
+  function rotateBoard() {
+    const pieces = document.querySelectorAll(".piece");
+    const newPositions = [];
+
+    // 1. Collect all piece data
+    pieces.forEach((piece) => {
+      const square = piece.parentElement;
+      const row = parseInt(square.dataset.row, 10);
+      const col = parseInt(square.dataset.col, 10);
+      const color = piece.classList.contains("red") ? "red" : "blue";
+      const isKing = piece.classList.contains("king");
+      const value = piece.dataset.value;
+      newPositions.push({ row, col, color, isKing, value, element: piece });
+    });
+
+    // 2. Remove all pieces
+    pieces.forEach((p) => p.remove());
+
+    // 3. Re-add them at rotated positions
+    newPositions.forEach(({ row, col, color, isKing, value }) => {
+      const newRow = 7 - row;
+      const newCol = 7 - col;
+      const targetSquare = document.querySelector(
+        `.square[data-row="${newRow}"][data-col="${newCol}"]`
+      );
+      if (!targetSquare) return;
+
+      const piece = document.createElement("div");
+      piece.classList.add("piece", color);
+      piece.dataset.value = value;
+      if (isKing) piece.classList.add("king");
+
+      const label = document.createElement("span");
+      label.classList.add("piece-number");
+      label.textContent = value;
+      piece.appendChild(label);
+
+      // Preserve tab index and draggable for input
+      piece.tabIndex = 0;
+      piece.draggable = true;
+
+      targetSquare.appendChild(piece);
+    });
+
+    // Optional: flip current player label visually (does NOT change turn!)
+    const currentPlayerLabel = document.querySelector(".current-player-label");
+    if (currentPlayerLabel) {
+      currentPlayerLabel.classList.toggle("rotated");
+    }
+
+    // Optional: add a visual cue that board is rotated
+    document.body.classList.toggle("board-rotated");
   }
 
   if (toggle) {
@@ -153,4 +232,3 @@ function showConfirmationModal(message, onConfirm) {
   noBtn.onclick = close;
   yesBtn.focus();
 }
-

@@ -28,16 +28,32 @@ document.addEventListener("DOMContentLoaded", () => {
   if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   }
-  
-  attachInputHandlers();
-  resetGame();
 
   const savedDepth = localStorage.getItem("aiDepth");
-  if (savedDepth && [1, 3, 4, 6].includes(parseInt(savedDepth))) {
-    aiDepth = parseInt(savedDepth);
-    const select = document.getElementById("ai-difficulty");
-    if (select) select.value = aiDepth;
+  let loadedDepth = 1;
+  if (savedDepth) {
+    const parsed = parseInt(savedDepth, 10);
+    if ([2, 3, 4, 6].includes(parsed)) {
+      loadedDepth = parsed;
+    }
   }
+  window.aiDepth = loadedDepth;
+
+  // Now update display using window.aiDepth
+  const difficultyDisplay = document.getElementById("ai-difficulty-display");
+  if (difficultyDisplay) {
+    const labels = { 2: "Easy", 3: "Medium", 4: "Hard", 6: "Expert" };
+    difficultyDisplay.textContent = labels[window.aiDepth] || "Custom";
+  }
+
+  // Sync the <select> dropdown
+  const difficultySelect = document.getElementById("ai-difficulty");
+  if (difficultySelect) {
+    difficultySelect.value = window.aiDepth;
+  }
+
+  attachInputHandlers();
+  resetGame();
 
   setupDebugControls();
   localStorage.removeItem("aiDifficulty");

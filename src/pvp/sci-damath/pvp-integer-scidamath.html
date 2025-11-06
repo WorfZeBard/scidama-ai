@@ -3,10 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Sci-Damath Offline - Player vs Player"
-    />
+    <meta name="description" content="Sci-Damath Offline - Player vs Player" />
     <title>Sci-Damath Offline - Player vs Player</title>
     <link rel="stylesheet" href="../../assets/css/styles.css" />
     <link rel="icon" type="image/x-icon" href="../../assets/favicon.ico" />
@@ -49,13 +46,13 @@
             <!-- Gameboard -->
             <div class="board-wrapper">
               <section
-              id="gameboard"
-              tabindex="0"
-              aria-label="Gameboard"
-              aria-describedby="game-instructions"
-            ></section>
+                id="gameboard"
+                tabindex="0"
+                aria-label="Gameboard"
+                aria-describedby="game-instructions"
+              ></section>
             </div>
-            
+
             <!-- Move History & Actions -->
             <aside
               class="sidebar actions-sidebar"
@@ -87,15 +84,37 @@
     </main>
 
     <!-- Sounds -->
-  <div id="sounds" aria-hidden="true">
-    <audio id="move-sound" src="../../assets/sounds/move.mp3" preload="auto"></audio>
-    <audio id="capture-sound" src="../../assets/sounds/capture.mp3" preload="auto"></audio>
-    <audio id="move-promotion001" src="../../assets/sounds/promotion.mp3" preload="auto"></audio>
-    <audio id="game-end" src="../../assets/sounds/game-end.mp3" preload="auto"></audio>
-  </div>
+    <div id="sounds" aria-hidden="true">
+      <audio
+        id="move-sound"
+        src="../../assets/sounds/move.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="capture-sound"
+        src="../../assets/sounds/capture.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="move-promotion001"
+        src="../../assets/sounds/promotion.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="game-end"
+        src="../../assets/sounds/game-end.mp3"
+        preload="auto"
+      ></audio>
+    </div>
 
     <!-- Confirmation Modal -->
-    <div id="confirmation-modal" class="modal" hidden role="dialog" aria-labelledby="confirmation-title">
+    <div
+      id="confirmation-modal"
+      class="modal"
+      hidden
+      role="dialog"
+      aria-labelledby="confirmation-title"
+    >
       <div class="modal-content">
         <h2 id="confirmation-title">Confirm Action</h2>
         <div id="confirmation-message"></div>
@@ -105,9 +124,15 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Game Over Modal -->
-    <div id="game-over-modal" class="modal" hidden role="dialog" aria-labelledby="game-over-title">
+    <div
+      id="game-over-modal"
+      class="modal"
+      hidden
+      role="dialog"
+      aria-labelledby="game-over-title"
+    >
       <div class="modal-content">
         <h2 id="game-over-title">Game Over</h2>
         <div id="game-over-message"></div>
@@ -117,7 +142,16 @@
         </div>
       </div>
     </div>
-    <script src="../../assets/js/app.js"></script>
-    <script src="../../assets/js/theme.js"></script>
+    <script src="../../assets/js/1-config.js"></script>
+    <script src="../../assets/js/2-state.js"></script>
+    <script src="../../assets/js/3-logic.js"></script>
+    <script src="../../assets/js/5-theme.js"></script>
+    <script src="../../assets/js/6-dom.js"></script>
+    <script src="../../assets/js/7-gameflow.js"></script>
+    <script src="../../assets/js/8-history.js"></script>
+    <script src="../../assets/js/9-input.js"></script>
+    <script src="../../assets/js/10-timers.js"></script>
+    <script src="../../assets/js/11-ui-controls.js"></script>
+    <script src="../../assets/js/12-init.js"></script>
   </body>
 </html>

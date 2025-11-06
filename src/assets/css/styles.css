@@ -385,6 +385,22 @@ h3 {
     animation-play-state: var(--animation-play-state);
 }
 
+.ai-difficulty-label {
+    font-size: 1em;
+    font-weight: bold;
+    text-align: center;
+    padding: 6px 12px;
+    border-radius: 6px;
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.05);
+    margin-top: 8px;
+}
+
+body[data-theme="dark"] .ai-difficulty-label {
+    background: rgba(255, 255, 255, 0.05);
+    color: #f0f0f0;
+}
+
 @keyframes flashYellow {
 
     0%,
@@ -600,7 +616,7 @@ h3 {
     position: absolute;
     width: 75%;
     height: 75%;
-    background: rgba(128, 128, 128, 0.3);
+    background: rgba(64, 64, 64, 0.3);
     border-radius: 50%;
     z-index: 1;
 }
@@ -755,6 +771,7 @@ body[data-theme="dark"] .move-history-header {
 #back-to-menu,
 #redo,
 #undo,
+#rotate-board-180,
 #toggle-transparency {
     background: var(--btn-default-bg);
 }
@@ -1218,7 +1235,7 @@ body[data-theme="dark"] .menu-content {
 .option-group input[type="checkbox"] {
     margin-right: 8px;
 }
-
+f
 #btn-pvp {
     background: var(--btn-success-bg);
 }
@@ -1252,4 +1269,14 @@ body[data-theme="dark"] .menu-content {
 
 #menu-title[data-theme="dark"] {
     color: white;
+}
+
+/* Board rotation */
+.board-wrapper.rotated {
+    transform: rotate(180deg);
+}
+
+.board-wrapper.rotated .piece {
+    /* Optional: flip piece symbols so they're not upside-down */
+    transform: rotate(180deg);
 }

@@ -17,28 +17,38 @@ function updateTurnHistoryDOM() {
     const moveItem = document.createElement("li");
     moveItem.className = `move-item ${entry.player}`;
     let moveText = "";
+    const moveNumber = index + 1;
+    moveText = `(${moveNumber}) ${moveText}`;
 
     if (entry.type === "capture") {
-      let multiplier = 1,
-        multiplierText = "×1";
-      if (entry.isCapturingKing && entry.isCapturedKing) {
-        multiplier = 4;
-        multiplierText = "×4 (DAMA vs DAMA)";
-      } else if (entry.isCapturingKing || entry.isCapturedKing) {
-        multiplier = 2;
-        multiplierText = "×2 (DAMA involved)";
-      }
-      const resultClass =
-        entry.result > 0 ? "positive" : entry.result < 0 ? "negative" : "zero";
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: ${
-        entry.piece
-      }(${entry.capturingValue}) <span class="operator">${
-        entry.operator
-      }</span> (${
-        entry.capturedValue
-      }) = <span class="result ${resultClass}">${entry.result.toFixed(
-        2
-      )} (${multiplierText})</span>`;
+      const isCapturingKing = entry.isCapturingKing;
+      const isCapturedKing = entry.isCapturedKing;
+      let multiplier = 1;
+      if (isCapturingKing && isCapturedKing) multiplier = 4;
+      else if (isCapturingKing || isCapturedKing) multiplier = 2;
+
+      // Format values with * if king
+      const val1Display = isCapturingKing
+        ? `${entry.capturingValue}*`
+        : entry.capturingValue;
+      const val2Display = isCapturedKing
+        ? `${entry.capturedValue}*`
+        : entry.capturedValue;
+
+      // Base score = entry.result / multiplier (reverse engineer)
+      const baseScore = (entry.result / multiplier).toFixed(2);
+      const finalScore = entry.result.toFixed(2);
+
+      // Format operator with brackets
+      const op = `<span class="operator">${entry.operator}</span>`;
+
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: [(${
+        entry.startRow
+      },${entry.startCol}) [${val1Display}] ${op} (${entry.endRow},${
+        entry.endCol
+      }) [${val2Display}]] × ${multiplier} = ${baseScore} × ${multiplier} = <span class="result ${
+        entry.result >= 0 ? "positive" : "negative"
+      }">${finalScore}</span>`;
     } else if (entry.type === "move") {
       moveText = `<strong>${entry.player.toUpperCase()}</strong>: ${
         entry.piece
@@ -80,38 +90,17 @@ function saveBoardState() {
   };
   document.querySelectorAll(".piece").forEach((piece) => {
     const square = piece.parentElement;
-    const valueStr = piece.dataset.value;
-    if (valueStr == null || valueStr === "") {
-      console.warn("Piece missing dataset.value:", piece);
-      return; // skip invalid piece
-    }
-    const value = parseFloat(valueStr);
-    if (isNaN(value)) {
-      console.warn("Invalid piece value:", valueStr, piece);
+    const pieceKey = piece.dataset.pieceKey;
+    if (!pieceKey || !PIECES[pieceKey]) {
+      console.warn("Piece missing valid data-piece-key:", piece);
       return;
-    }
-    const color = piece.classList.contains("red") ? "red" : "blue";
-    let pieceKey = null;
-    for (const key in PIECES) {
-      if (
-        PIECES[key].color === color &&
-        PIECES[key].value === value // 👈 compare numbers, not strings
-      ) {
-        pieceKey = key;
-        break;
-      }
-    }
-    if (!pieceKey) {
-      // Fallback: generate key from value (not ideal, but safe)
-      pieceKey =
-        color === "red" ? `r${Math.abs(value)}` : `b${Math.abs(value)}`;
     }
     state.pieces.push({
       key: pieceKey,
       row: parseInt(square.dataset.row),
       col: parseInt(square.dataset.col),
       isKing: piece.classList.contains("king"),
-      value: valueStr, // store original string to preserve sign/format
+      value: piece.dataset.value,
     });
   });
   return state;
@@ -124,11 +113,16 @@ function restoreBoardState(state) {
       `.square[data-row='${pieceData.row}'][data-col='${pieceData.col}']`
     );
     if (!square) return;
-    const color = pieceData.key.startsWith("r") ? "red" : "blue";
+    const pieceDataConfig = PIECES[pieceData.key];
+    if (!pieceDataConfig) {
+      console.warn("Unknown piece key in restore:", pieceData.key);
+      return;
+    }
     const piece = document.createElement("div");
-    piece.classList.add("piece", color);
-    if (pieceData.isKing) piece.classList.add("king");
+    piece.classList.add("piece", pieceDataConfig.color);
+    piece.dataset.pieceKey = pieceData.key; // ✅
     piece.dataset.value = pieceData.value;
+    if (pieceData.isKing) piece.classList.add("king");
     piece.draggable = true;
     piece.tabIndex = 0;
     const numberLabel = document.createElement("span");
@@ -174,7 +168,7 @@ function undoMove() {
 
   let stepsBack = 1;
   if (gameMode === "pvai") {
-    const lastTurn = turnHistory[currentTurnIndex]; // ✅ currentTurnIndex, not -1
+    const lastTurn = turnHistory[currentTurnIndex];
     if (lastTurn?.player === "blue") {
       stepsBack = 2;
     }
@@ -186,8 +180,14 @@ function undoMove() {
     return;
   }
 
-  restoreBoardState(turnHistory[targetIndex].endState);
+  // ✅ CRITICAL: Remove the undone turns from turnHistory
+  turnHistory = turnHistory.slice(0, targetIndex + 1);
+  currentTurnIndex = targetIndex;
 
+  // Restore state
+  restoreBoardState(turnHistory[currentTurnIndex].endState);
+
+  // Reset turn-related state
   if (gameMode === "pvai") {
     currentPlayer = "red";
     currentPlayerEl.textContent = "red";
@@ -196,12 +196,12 @@ function undoMove() {
     roundEl.className = "timer timer-red";
   }
 
-  currentTurnIndex = targetIndex;
-  currentTurnStartState = null;
-  isTurnActive = false;
   mustCaptureWithPiece = null;
   selectedPiece = null;
+  isTurnActive = false;
+  currentTurnStartState = null;
 
+  // ✅ Now update the DOM — it will reflect truncated history
   updateTurnHistoryDOM();
 }
 

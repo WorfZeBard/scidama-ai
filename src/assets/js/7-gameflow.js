@@ -35,7 +35,9 @@ function checkGameOver() {
     // Current player is stuck → game ends → tally all scores
     let winnerMessage = "";
 
-    const reason = `${currentPlayer === "red" ? "Red" : "Blue"} has no legal moves.`;
+    const reason = `${
+      currentPlayer === "red" ? "Red" : "Blue"
+    } has no legal moves.`;
     endGame(`${reason}${winnerMessage}`);
     return true;
   }

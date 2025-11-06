@@ -134,3 +134,25 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 });
+
+// Open AI Difficulty Modal from PvAI modal
+const pvaiButtons = document.querySelectorAll("#pvai-modal .variant-btn[data-variant='integer-ai']");
+pvaiButtons.forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.getElementById("pvai-modal").hidden = true;
+    document.getElementById("difficulty-modal").hidden = false;
+  });
+});
+
+// Handle difficulty selection
+document.querySelectorAll(".difficulty-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const depth = parseInt(btn.getAttribute("ai-difficulty"), 10);
+    if ([2, 3, 4, 6].includes(depth)) {
+      localStorage.setItem("aiDepth", String(depth));
+      console.log("AI Difficulty set to:", depth);
+      // Now navigate to the game
+      window.location.href = "src/pvai/index.html"; // ✅ Adjust path as needed
+    }
+  });
+});

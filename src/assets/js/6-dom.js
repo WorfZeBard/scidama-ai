@@ -1,12 +1,3 @@
-
-
-function showErrorMessage(message) {
-  if (!errorMessageEl) return;
-  errorMessageEl.textContent = message;
-  errorMessageEl.hidden = false;
-  setTimeout(() => (errorMessageEl.hidden = true), 5000);
-}
-
 function createBoardDOM(showPieces = true, setup = null) {
   const fragment = document.createDocumentFragment();
   for (let row = 0; row < 8; row++) {
@@ -99,12 +90,21 @@ function showValidMoves(piece, startRow, startCol) {
   clearValidMoves();
   const board = createLogicalBoard();
   const allMoves = generateAllMoves(board, currentPlayer);
+  const captureMoves = allMoves.filter((m) => m.isCapture);
+
+  let allowedMoves = allMoves;
+  if (captureMoves.length > 0) {
+    // Enforce Mayor Dama: only show highest-priority captures
+    allowedMoves = getAllBestCaptureMoves(board, currentPlayer);
+  }
+
   const validEnds = new Set();
-  for (const m of allMoves) {
+  for (const m of allowedMoves) {
     if (m.startRow === startRow && m.startCol === startCol) {
       validEnds.add(`${m.endRow},${m.endCol}`);
     }
   }
+
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       if (validEnds.has(`${r},${c}`)) {

@@ -29,7 +29,6 @@ function handleBoardClick(e) {
   const piece = e.target.closest(".piece");
   const square = e.target.closest(".square");
   if (!square || !square.classList.contains("playable")) return;
-
   if (piece && piece.classList.contains(currentPlayer)) {
     document
       .querySelectorAll(".square.piece-selected")
@@ -41,27 +40,14 @@ function handleBoardClick(e) {
     showValidMoves(piece, r, c);
     return;
   }
-
   if (selectedPiece && square) {
     const startSq = selectedPiece.parentElement;
     const startRow = parseInt(startSq.dataset.row, 10);
     const startCol = parseInt(startSq.dataset.col, 10);
     const endRow = parseInt(square.dataset.row, 10);
     const endCol = parseInt(square.dataset.col, 10);
-
-    const board = createLogicalBoard();
-    const allMoves = generateAllMoves(board, currentPlayer);
-    const isValid = allMoves.some(
-      (m) =>
-        m.startRow === startRow &&
-        m.startCol === startCol &&
-        m.endRow === endRow &&
-        m.endCol === endCol
-    );
-
-    if (isValid) {
-      performMove(selectedPiece, startRow, startCol, endRow, endCol);
-    }
+    // ✅ Delegate ALL validation to performMove
+    performMove(selectedPiece, startRow, startCol, endRow, endCol);
     selectedPiece = null;
     clearValidMoves();
   }
@@ -116,20 +102,8 @@ function handleDrop(e) {
   const startCol = parseInt(startSq.dataset.col, 10);
   const endRow = parseInt(square.dataset.row, 10);
   const endCol = parseInt(square.dataset.col, 10);
-
-  const board = createLogicalBoard();
-  const allMoves = generateAllMoves(board, currentPlayer);
-  const isValid = allMoves.some(
-    (m) =>
-      m.startRow === startRow &&
-      m.startCol === startCol &&
-      m.endRow === endRow &&
-      m.endCol === endCol
-  );
-
-  if (isValid) {
-    performMove(selectedPiece, startRow, startCol, endRow, endCol);
-  }
+  // ✅ Delegate ALL validation to performMove
+  performMove(selectedPiece, startRow, startCol, endRow, endCol);
   if (selectedPiece) {
     selectedPiece.parentElement.classList.remove("piece-dragging");
     selectedPiece = null;
