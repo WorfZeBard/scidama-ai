@@ -434,12 +434,12 @@ const DAMATH_LAYOUT = [
 
 const DIRECTIONS = {
   red: [
-    [-1, -1],
-    [-1, 1],
+    [-1, -1], // DOM: move up-left
+    [-1, 1], // DOM: move up-right
   ],
   blue: [
-    [1, -1],
-    [1, 1],
+    [1, -1], // DOM: move down-left
+    [1, 1], // DOM: move down-right
   ],
   king: [
     [-1, -1],
@@ -452,39 +452,36 @@ const DIRECTIONS = {
 // Initial setups
 
 const INITIAL_SETUP = {
-  // RED at bottom → logical rows 0–2 → DOM rows 7–5
-  "0,1": "r1",
-  "0,3": "r2",
-  "0,5": "r3",
-  "0,7": "r4",
-  "1,0": "r5",
-  "1,2": "r6",
-  "1,4": "r7",
-  "1,6": "r8",
-  "2,1": "r9",
-  "2,3": "r10",
-  "2,5": "r11",
-  "2,7": "r12",
-
-  // BLUE at top → logical rows 5–7 → DOM rows 2–0
-  "5,0": "b1",
-  "5,2": "b2",
-  "5,4": "b3",
-  "5,6": "b4",
-  "6,1": "b5",
-  "6,3": "b6",
-  "6,5": "b7",
-  "6,7": "b8",
-  "7,0": "b9",
-  "7,2": "b10",
-  "7,4": "b11",
-  "7,6": "b12",
+  "0,0": "b1",
+  "0,2": "b2",
+  "0,4": "b3",
+  "0,6": "b4",
+  "1,1": "b5",
+  "1,3": "b6",
+  "1,5": "b7",
+  "1,7": "b8",
+  "2,0": "b9",
+  "2,2": "b10",
+  "2,4": "b11",
+  "2,6": "b12",
+  "5,1": "r1",
+  "5,3": "r2",
+  "5,5": "r3",
+  "5,7": "r4",
+  "6,0": "r5",
+  "6,2": "r6",
+  "6,4": "r7",
+  "6,6": "r8",
+  "7,1": "r9",
+  "7,3": "r10",
+  "7,5": "r11",
+  "7,7": "r12",
 };
 
 const DEBUG_SETUP = {
-  "5,2": "r1",
-  "6,3": "r6",
-  "7,4": "b12_king",
+  "5,1": "r1",
+  "6,2": "r6",
+  "7,3": "b12_king",
 };
 
 // Game mode detection
@@ -547,21 +544,19 @@ function createLogicalBoard() {
     .map(() => Array(8).fill(null));
   document.querySelectorAll(".piece").forEach((el) => {
     const sq = el.parentElement;
-    const domRow = parseInt(sq.dataset.row, 10);
-    const domCol = parseInt(sq.dataset.col, 10);
-    const logicalRow = domToLogicalRow(domRow); // ✅ convert
-    const logicalCol = domCol;
-
-    const pieceKey = el.dataset.pieceKey;
+    const r = parseInt(sq.dataset.row, 10);
+    const c = parseInt(sq.dataset.col, 10);
+    const pieceKey = el.dataset.pieceKey; // ✅ Read key
     const pieceData = PIECES[pieceKey];
-    if (!pieceData) return;
-
-    board[logicalRow][logicalCol] = {
-      // ✅ use logical coords
+    if (!pieceData) {
+      console.warn("Unknown piece key:", pieceKey, el);
+      return;
+    }
+    board[r][c] = {
       color: pieceData.color,
       value: pieceData.value,
       isKing: pieceData.isKing,
-      key: pieceKey,
+      key: pieceKey, // optional, but helpful for debugging
     };
   });
   return board;
@@ -728,64 +723,124 @@ function playerHasAnyValidMove(color) {
   return generateAllMoves(board, color).length > 0;
 }
 
-// Convert logical Sci-Damath row (0 = bottom) → DOM row (0 = top)
-function logicalToDomRow(logicalRow) {
-  return 7 - logicalRow;
-}
+function updateTurnHistoryDOM() {
+  const historyList = document.getElementById("move-history-content");
+  if (!historyList) return;
+  historyList.innerHTML = "";
 
-// Convert DOM row (0 = top) → logical Sci-Damath row (0 = bottom)
-function domToLogicalRow(domRow) {
-  return 7 - domRow;
+  // Flatten all moves from all turns (skip turn 0 = initial state)
+  const allMoves = [];
+  for (let i = 1; i < turnHistory.length; i++) {
+    const turn = turnHistory[i];
+    if (turn.moves && turn.moves.length > 0) {
+      allMoves.push(...turn.moves);
+    }
+  }
+
+  // Render each move
+  allMoves.forEach((entry, index) => {
+    const moveItem = document.createElement("li");
+    moveItem.className = `move-item ${entry.player}`;
+    let moveText = "";
+
+    // 👇 Now you can safely use (index + 1)
+    const moveNumber = index + 1;
+
+    if (entry.type === "capture") {
+      const isCapturingKing = entry.isCapturingKing;
+      const isCapturedKing = entry.isCapturedKing;
+      let multiplier = 1;
+      if (isCapturingKing && isCapturedKing) multiplier = 4;
+      else if (isCapturingKing || isCapturedKing) multiplier = 2;
+
+      const val1Display = isCapturingKing
+        ? `${entry.capturingValue}*`
+        : entry.capturingValue;
+      const val2Display = isCapturedKing
+        ? `${entry.capturedValue}*`
+        : entry.capturedValue;
+      const baseScore = (entry.result / multiplier).toFixed(2);
+      const finalScore = entry.result.toFixed(2);
+
+      const op = `<span class="operator">${entry.operator}</span>`;
+
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: [(${
+        entry.startRow
+      },${entry.startCol}) [${val1Display}] ${op} (${entry.endRow},${
+        entry.endCol
+      }) [${val2Display}]] × ${multiplier} = ${baseScore} × ${multiplier} = <span class="result ${
+        entry.result >= 0 ? "positive" : "negative"
+      }">${finalScore}</span>`;
+    } else if (entry.type === "move") {
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: ${
+        entry.piece
+      }(${entry.value}) moved to (${entry.endRow},${entry.endCol})`;
+    } else if (entry.type === "promotion") {
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: ${
+        entry.piece
+      } promoted to DAMA!`;
+    } else if (entry.type === "final-tally") {
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: Final tally of remaining pieces = <span class="result ${
+        entry.value >= 0 ? "positive" : "negative"
+      }">${entry.value.toFixed(2)} (×2 for each DAMA)</span>`;
+    }
+
+    // ✅ Prepend move number like "(1)", "(2)", etc.
+    moveText = `(${moveNumber}) ${moveText}`;
+
+    moveItem.innerHTML = moveText;
+    historyList.appendChild(moveItem);
+  });
+  
+  const scrollableContainer = document.querySelector(
+    ".move-history-scrollable"
+  );
+  if (scrollableContainer) {
+    scrollableContainer.scrollTop = scrollableContainer.scrollHeight;
+  }
 }
 
 function placeInitialPieces() {
   document.querySelectorAll(".piece").forEach((p) => p.remove());
   const setup = debugMode ? DEBUG_SETUP : INITIAL_SETUP;
-
   for (const pos in setup) {
-    const pieceKey = setup[pos]; // ✅ MUST be here
-    const pieceData = PIECES[pieceKey]; // ✅ MUST be here
-    if (!pieceData) {
-      console.warn("Unknown piece key:", pieceKey, "at", pos);
-      continue;
-    }
+    const [row, col] = pos.split(",").map(Number);
+    const pieceKey = setup[pos];
+    const pieceData = PIECES[pieceKey];
 
-    const [logicalRow, logicalCol] = pos.split(",").map(Number);
-    const domRow = logicalToDomRow(logicalRow);
-    const domCol = logicalCol;
-
-    if ((domRow + domCol) % 2 !== 0) {
-      console.error(
-        `Non-playable square: ${pieceKey} at logical ${pos} → DOM (${domRow},${domCol})`
-      );
-      continue;
-    }
-
+    if (!pieceData) continue;
     const square = document.querySelector(
-      `.square[data-row='${domRow}'][data-col='${domCol}']`
+      `.square[data-row='${row}'][data-col='${col}']`
     );
     if (!square || !square.classList.contains("playable")) continue;
-
     const piece = document.createElement("div");
-    piece.classList.add("piece", pieceData.color);
-    piece.dataset.pieceKey = pieceKey; // 🔑 critical
+    piece.dataset.pieceKey = pieceKey; // ✅ NEW
+    piece.classList.add("piece", pieceData.color, pieceKey);
+    if (pieceData.isKing) piece.classList.add("king");
+    piece.setAttribute("tabindex", "0");
+    piece.draggable = true;
     piece.dataset.value = pieceData.value;
-    piece.draggable = true; // ✅
-    piece.tabIndex = 0; // ✅
-
     const label = document.createElement("span");
     label.classList.add("piece-number");
     label.textContent = pieceData.value;
     piece.appendChild(label);
-
     square.appendChild(piece);
   }
-
   const initialState = saveBoardState();
-  turnHistory = [{ player: null, endState: initialState, moves: [] }];
-  currentTurnIndex = 0;
+  // ✅ Add initial state as turn 0
+  turnHistory = [
+    {
+      player: null,
+      endState: initialState,
+      moves: [],
+    },
+  ];
+  currentTurnIndex = 0; // now 0 = initial state
+  currentTurnStartState = null;
+  isTurnActive = false;
+  currentHistoryIndex = -1;
   updateTurnHistoryDOM();
-} 
+}
 
 function calculateFinalScores() {
   const redPieces = document.querySelectorAll(".piece.red");
@@ -1210,16 +1265,18 @@ function switchTurn() {
   const turnEntry = {
     player: lastPlayer,
     endState: currentState,
-    moves: [...currentTurnMoveIds],
+    moves: [...currentTurnMoveIds], // 👈 CRITICAL: persist the moves
   };
+
   turnHistory = turnHistory.slice(0, currentTurnIndex + 1);
   turnHistory.push(turnEntry);
   currentTurnIndex++;
 
+  // ✅ Clear for next turn
   currentTurnMoveIds = [];
 
-  // ✅ ADD THIS LINE:
-  updateTurnHistoryDOM();
+  // ✅ Update history display
+  updateTurnHistoryDOM(); // ←←← ADD THIS
 
   if (gameMode === "pvai" && currentPlayer === "blue") {
     setTimeout(() => makeAIMove(), 750);
@@ -1290,9 +1347,9 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       result: scoreChange,
       isCapturingKing: piece.classList.contains("king"),
       isCapturedKing: capturedPiece.classList.contains("king"),
-      startRow: logicalStartRow,
+      startRow,
       startCol,
-      endRow: logicalEndRow,
+      endRow,
       endCol,
     };
     currentTurnMoveIds.push(moveData);
@@ -1304,7 +1361,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       player: color,
       piece: pieceKey,
       value: pieceValue,
-      endRow: logicalEndRow,
+      endRow,
       endCol,
     };
     currentTurnMoveIds.push(moveData);
@@ -1318,27 +1375,26 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
 
   // After moving the piece to endSq
   let newPieceKey = pieceKey;
-  const wasPromoted = !isKing &&
-  (color === "red" && logicalEndRow === 7) ||
-  (color === "blue" && logicalEndRow === 0)
+
+  const wasPromoted =
+    (!isKing && color === "red" && endRow === 0) ||
+    (color === "blue" && endRow === 7);
 
   if (wasPromoted) {
     // Promote by updating key and class
     newPieceKey = pieceKey + "_king";
     piece.classList.add("king");
     piece.dataset.pieceKey = newPieceKey;
-    piece.classList.add(newPieceKey);
     const pieceData = PIECES[newPieceKey];
     if (pieceData) {
       piece.dataset.value = pieceData.value; // though same value
-      // Log promotion
-      currentTurnMoveIds.push({
-        type: "promotion",
-        player: color,
-        piece: pieceKey,
-        newPieceKey: newPieceKey,
-      });
     }
+    const moveData = {
+      type: "promotion",
+      player: color,
+      piece: pieceKey,
+    };
+    currentTurnMoveIds.push(moveData);
     playSound("promotion");
     mustCaptureWithPiece = null;
     switchTurn();
@@ -1469,9 +1525,9 @@ function makeAIMove() {
       );
       if (captureMoves.length > 0) {
         // Enforce Mayor Dama even in continuation
-          const bestContinuation = getAllBestCaptureMoves(board, "blue").find(
-            (m) => m.startRow === startRow && m.startCol === startCol
-          );
+        const bestContinuation = getAllBestCaptureMoves(board, "blue").find(
+          (m) => m.startRow === startRow && m.startCol === startCol
+        );
         executeLogicalMove(bestContinuation || captureMoves[0]);
         return;
       }
@@ -1516,7 +1572,7 @@ function makeAIMove() {
           new Set([`${move.startRow},${move.startCol}`])
         )
       : 0;
-    
+
     // 🔹 Promotion check
     const promotesNow =
       !board[move.startRow][move.startCol]?.isKing &&
@@ -1607,7 +1663,6 @@ function getBestCaptureMove(board, color) {
   }
   return bestMove;
 }
-
 
 ===== 4-debug.js =====
 function printBoard() {
@@ -1869,6 +1924,7 @@ function showValidMoves(piece, startRow, startCol) {
     }
   }
 }
+
 ===== 7-gameflow.js =====
 function makeKing(piece) {
   piece.classList.add("king", "promote");
@@ -1907,7 +1963,9 @@ function checkGameOver() {
     // Current player is stuck → game ends → tally all scores
     let winnerMessage = "";
 
-    const reason = `${currentPlayer === "red" ? "Red" : "Blue"} has no legal moves.`;
+    const reason = `${
+      currentPlayer === "red" ? "Red" : "Blue"
+    } has no legal moves.`;
     endGame(`${reason}${winnerMessage}`);
     return true;
   }
@@ -1929,82 +1987,6 @@ function checkGameOver() {
 }
 
 ===== 8-history.js =====
-function updateTurnHistoryDOM() {
-  const historyList = document.getElementById("move-history-content");
-  if (!historyList) return;
-  historyList.innerHTML = "";
-
-  // Flatten all moves from all turns (skip turn 0 = initial state)
-  const allMoves = [];
-  for (let i = 1; i < turnHistory.length; i++) {
-    const turn = turnHistory[i];
-    if (turn.moves && turn.moves.length > 0) {
-      allMoves.push(...turn.moves);
-    }
-  }
-
-  allMoves.forEach((entry, index) => {
-    const moveItem = document.createElement("li");
-    moveItem.className = `move-item ${entry.player}`;
-    let moveText = "";
-
-    // 👇 Now you can safely use (index + 1)
-    const moveNumber = index + 1;
-
-    if (entry.type === "capture") {
-      const isCapturingKing = entry.isCapturingKing;
-      const isCapturedKing = entry.isCapturedKing;
-      let multiplier = 1;
-      if (isCapturingKing && isCapturedKing) multiplier = 4;
-      else if (isCapturingKing || isCapturedKing) multiplier = 2;
-
-      const val1Display = isCapturingKing
-        ? `${entry.capturingValue}*`
-        : entry.capturingValue;
-      const val2Display = isCapturedKing
-        ? `${entry.capturedValue}*`
-        : entry.capturedValue;
-      const baseScore = (entry.result / multiplier).toFixed(2);
-      const finalScore = entry.result.toFixed(2);
-
-      const op = `<span class="operator">${entry.operator}</span>`;
-
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: [(${
-        entry.startRow
-      },${entry.startCol}) [${val1Display}] ${op} (${entry.endRow},${
-        entry.endCol
-      }) [${val2Display}]] × ${multiplier} = ${baseScore} × ${multiplier} = <span class="result ${
-        entry.result >= 0 ? "positive" : "negative"
-      }">${finalScore}</span>`;
-    } else if (entry.type === "move") {
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: ${
-        entry.piece
-      }(${entry.value}) moved to (${entry.endRow},${entry.endCol})`;
-    } else if (entry.type === "promotion") {
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: ${
-        entry.piece
-      } promoted to DAMA!`;
-    } else if (entry.type === "final-tally") {
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: Final tally of remaining pieces = <span class="result ${
-        entry.value >= 0 ? "positive" : "negative"
-      }">${entry.value.toFixed(2)} (×2 for each DAMA)</span>`;
-    }
-
-    // ✅ Prepend move number like "(1)", "(2)", etc.
-    moveText = `(${moveNumber}) ${moveText}`;
-
-    moveItem.innerHTML = moveText;
-    historyList.appendChild(moveItem);
-  });
-  
-  const scrollableContainer = document.querySelector(
-    ".move-history-scrollable"
-  );
-  if (scrollableContainer) {
-    scrollableContainer.scrollTop = scrollableContainer.scrollHeight;
-  }
-}
-
 function saveBoardState() {
   const state = {
     redScore,
@@ -2195,22 +2177,11 @@ function attachInputHandlers() {
 }
 
 function handleBoardClick(e) {
-  console.log("Click triggered");
   if (gameMode === "pvai" && currentPlayer === "blue") {
-    console.log("Blocked: AI's turn");
     return;
   }
   const piece = e.target.closest(".piece");
   const square = e.target.closest(".square");
-  console.log("Piece:", piece);
-  console.log("Current player:", currentPlayer);
-  if (piece) {
-    console.log("Piece classList:", piece.classList);
-    console.log(
-      "Has current player class?",
-      piece.classList.contains(currentPlayer)
-    );
-  }
   if (!square || !square.classList.contains("playable")) return;
   if (piece && piece.classList.contains(currentPlayer)) {
     document
@@ -2225,20 +2196,12 @@ function handleBoardClick(e) {
   }
   if (selectedPiece && square) {
     const startSq = selectedPiece.parentElement;
-    const domStartRow = parseInt(startSq.dataset.row, 10);
-    const domEndRow = parseInt(square.dataset.row, 10);
-    const logicalStartRow = domToLogicalRow(domStartRow); // ✅
-    const logicalEndRow = domToLogicalRow(domEndRow); // ✅
+    const startRow = parseInt(startSq.dataset.row, 10);
     const startCol = parseInt(startSq.dataset.col, 10);
+    const endRow = parseInt(square.dataset.row, 10);
     const endCol = parseInt(square.dataset.col, 10);
     // ✅ Delegate ALL validation to performMove
-    performMove(
-      selectedPiece,
-      logicalStartRow,
-      startCol,
-      logicalEndRow,
-      endCol
-    );
+    performMove(selectedPiece, startRow, startCol, endRow, endCol);
     selectedPiece = null;
     clearValidMoves();
   }
@@ -2289,14 +2252,12 @@ function handleDrop(e) {
     return;
   }
   const startSq = selectedPiece.parentElement;
-  const domStartRow = parseInt(startSq.dataset.row, 10);
-  const domEndRow = parseInt(startSq.dataset.row, 10);
-  const logicalStartRow = domToLogicalRow(domStartRow);
-  const logicalEndRow = domToLogicalRow(domEndRow);
+  const startRow = parseInt(startSq.dataset.row, 10);
   const startCol = parseInt(startSq.dataset.col, 10);
+  const endRow = parseInt(square.dataset.row, 10);
   const endCol = parseInt(square.dataset.col, 10);
   // ✅ Delegate ALL validation to performMove
-  performMove(selectedPiece, logicalStartRow, startCol, logicalEndRow, endCol);
+  performMove(selectedPiece, startRow, startCol, endRow, endCol);
   if (selectedPiece) {
     selectedPiece.parentElement.classList.remove("piece-dragging");
     selectedPiece = null;

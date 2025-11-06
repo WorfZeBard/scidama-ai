@@ -251,7 +251,7 @@ function updateTurnHistoryDOM() {
     moveItem.innerHTML = moveText;
     historyList.appendChild(moveItem);
   });
-
+  
   const scrollableContainer = document.querySelector(
     ".move-history-scrollable"
   );
