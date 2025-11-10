@@ -430,7 +430,7 @@ body[data-theme="dark"] .ai-difficulty-label {
   }
 }
 
-.current-player-label {
+.current-turn-label {
   font-size: 1em;
   font-weight: bold;
   text-align: center;
@@ -440,13 +440,13 @@ body[data-theme="dark"] .ai-difficulty-label {
   color: var(--text-primary);
 }
 
-.current-player-label[data-player="red"] {
+.current-turn-label[data-player="red"] {
   background: rgba(198, 40, 40, 0.1);
   border: 2px solid var(--color-red);
   color: var(--color-red);
 }
 
-.current-player-label[data-player="blue"] {
+.current-turn-label[data-player="blue"] {
   background: rgba(21, 101, 192, 0.1);
   border: 2px solid var(--color-blue);
   color: var(--color-blue);
@@ -764,6 +764,7 @@ body[data-theme="dark"] .move-history-header {
 #redo,
 #undo,
 #rotate-board-180,
+#how-to-play,
 #toggle-transparency {
   background: var(--btn-default-bg);
 }
@@ -897,7 +898,7 @@ body[data-theme="dark"] .sidebar {
 }
 
 body[data-theme="dark"] .timer-label,
-body[data-theme="dark"] .current-player-label {
+body[data-theme="dark"] .current-turn-label {
   color: #f0f0f0;
 }
 

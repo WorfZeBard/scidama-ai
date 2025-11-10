@@ -1,19 +1,18 @@
+// assets/js/12-init.js
 document.addEventListener("DOMContentLoaded", () => {
   // Assign DOM references
   gameboard = document.getElementById("gameboard");
   redScoreEl = document.getElementById("red-score");
   blueScoreEl = document.getElementById("blue-score");
-  currentPlayerEl = document.getElementById("current-player");
+  currentPlayerEl = document.getElementById("current-turn");
   errorMessageEl = document.getElementById("error-message");
   sessionEl = document.getElementById("session-time");
   roundEl = document.getElementById("round-time");
-
   // Ensure all required elements exist
   if (!gameboard || !redScoreEl || !blueScoreEl || !currentPlayerEl) {
     console.error("Missing critical DOM elements. Check your HTML.");
     return;
   }
-
   // Initialize sounds
   sounds = {
     move: document.getElementById("move-sound"),
@@ -24,7 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // Setup UI labels
-  const currentPlayerLabel = document.querySelector(".current-player-label");
+  const currentPlayerLabel = document.querySelector(".current-turn-label");
   if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   }
@@ -38,26 +37,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   window.aiDepth = loadedDepth;
-
   // Now update display using window.aiDepth
   const difficultyDisplay = document.getElementById("ai-difficulty-display");
   if (difficultyDisplay) {
     const labels = { 2: "Easy", 3: "Medium", 4: "Hard", 6: "Expert" };
     difficultyDisplay.textContent = labels[window.aiDepth] || "Custom";
   }
-
   // Sync the <select> dropdown
   const difficultySelect = document.getElementById("ai-difficulty");
   if (difficultySelect) {
     difficultySelect.value = window.aiDepth;
   }
-
   attachInputHandlers();
   resetGame();
-
   setupDebugControls();
   localStorage.removeItem("aiDifficulty");
-
   // Sidebar toggle
   const toggleBtn = document.getElementById("toggle-controls");
   const sidebar = document.querySelector(".controls-sidebar");

@@ -19,11 +19,11 @@
             <aside class="sidebar stats-sidebar" aria-label="Game stats">
               <section class="scoreboard" aria-label="Scoreboard">
                 <div class="score red">
-                  <h2>Human Score</h2>
+                  <h2>Red Score</h2>
                   <span id="red-score">0.00</span>
                 </div>
                 <div class="score blue">
-                  <h2>AI Score</h2>
+                  <h2>Blue Score</h2>
                   <span id="blue-score">0.00</span>
                 </div>
               </section>
@@ -37,8 +37,8 @@
                   <span class="timer-label">Round:</span>
                   <span id="round-time">1:00</span>
                 </div>
-                <div class="current-player-label" data-player="red">
-                  Current Player: <span id="current-player">Human</span>
+                <div class="current-turn-label" data-player="red">
+                  Current Turn: <span id="current-turn"></span>
                 </div>
                 <div class="ai-difficulty-label">
                   AI Difficulty: <span id="ai-difficulty-display"></span>
@@ -73,6 +73,7 @@
                 <button id="agree-finish">Agree to Finish</button>
                 <button id="toggle-transparency">Show Symbols</button>
                 <button id="undo">Undo</button>
+                <button id="how-to-play">How to Play</button>
                 <button id="toggle-dark-mode">Dark Mode</button>
                 <button id="back-to-menu">← Back to Menu</button>
               </div>
@@ -137,6 +138,119 @@
           <button id="new-game-btn" class="btn-primary">New Game</button>
           <button id="close-modal" class="btn-primary">Close</button>
         </div>
+      </div>
+    </div>
+    <!-- How to Play Modal -->
+    <div
+      id="how-to-play-modal"
+      class="modal"
+      hidden
+      role="dialog"
+      aria-labelledby="howto-title"
+    >
+      <div class="modal-content">
+        <h2 id="howto-title">How to Play: Integer Sci-Damath</h2>
+        <div
+          style="
+            text-align: left;
+            max-height: 60vh;
+            overflow-y: auto;
+            padding: 0 10px;
+          "
+        >
+          <p>
+            <strong>Objective:</strong> Finish the game with the
+            <em>lowest total score</em>. Lower score wins!
+          </p>
+
+          <h3>Setup</h3>
+          <ul>
+            <li>
+              Red pieces (top): [-9, 6, -1, 4, 0, -3, 10, -7, -11, 8, -5, 2]
+            </li>
+            <li>
+              Blue pieces (bottom): [2, -5, 8, -11, -7, 10, -3, 0, 4, -1, 6, -9]
+            </li>
+            <li>Pieces start on dark squares only.</li>
+          </ul>
+
+          <h3>Movement</h3>
+          <ul>
+            <li>
+              <strong>Regular piece</strong>: moves diagonally forward one
+              square.
+            </li>
+            <li>
+              <strong>Dama (King)</strong>: promotes when reaching the
+              opponent's back row. Can move/capture any distance diagonally.
+            </li>
+          </ul>
+
+          <h3>Capturing</h3>
+          <ul>
+            <li>
+              Captures are <strong>mandatory</strong>. If you can capture, you
+              must.
+            </li>
+            <li>Jump over an opponent’s piece to an empty square beyond it.</li>
+            <li>
+              After a capture, if another capture is possible with the same
+              piece, you must continue (<em>multi-jump</em>).
+            </li>
+            <li>
+              <strong>Mayor Dama Rule</strong>: If multiple capture options
+              exist, you must choose the sequence that captures the
+              <strong>most pieces</strong>. If tied, prefer starting with a
+              Dama.
+            </li>
+          </ul>
+
+          <h3>Scoring a Capture</h3>
+          <p>
+            When capturing, apply the mathematical operator (<code>+</code>,
+            <code>−</code>, <code>×</code>, <code>÷</code>) on the destination
+            square:
+          </p>
+          <pre>Result = (Your Value) [operator] (Opponent's Value)</pre>
+          <p>Then apply multipliers:</p>
+          <ul>
+            <li>
+              <strong>×2</strong> if either capturing or captured piece is a
+              Dama.
+            </li>
+            <li><strong>×4</strong> if both are Damas.</li>
+          </ul>
+          <p>The result is added to your running score.</p>
+
+          <h3>End of Game</h3>
+          <ul>
+            <li>
+              Game ends when:
+              <ul>
+                <li>A player has no legal moves.</li>
+                <li>All of one player’s pieces are captured.</li>
+                <li>Surrender or mutual agreement to finish.</li>
+              </ul>
+            </li>
+            <li>
+              Remaining pieces are tallied:
+              <ul>
+                <li>Regular piece: add its value once.</li>
+                <li>Dama: add its value <strong>twice</strong>.</li>
+              </ul>
+            </li>
+            <li>
+              <strong>Final winner = player with the LOWER total score.</strong>
+            </li>
+          </ul>
+
+          <p>
+            <em
+              >Tip: A negative score is key for winning!</em
+            >
+          </p>
+        </div>
+        <button class="modal-close">Close</button>
       </div>
     </div>
     <script src="../../assets/js/1-config.js"></script>

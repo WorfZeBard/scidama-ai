@@ -144,15 +144,19 @@ pvaiButtons.forEach(btn => {
   });
 });
 
-// Handle difficulty selection
+// assets/js/menu.js
+// REPLACE the existing difficulty button click handler with this:
 document.querySelectorAll(".difficulty-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const depth = parseInt(btn.getAttribute("ai-difficulty"), 10);
+    const playerColorSelect = document.getElementById("player-color");
+    const humanColor = playerColorSelect ? playerColorSelect.value : "red";
+    
     if ([2, 3, 4, 6].includes(depth)) {
       localStorage.setItem("aiDepth", String(depth));
-      console.log("AI Difficulty set to:", depth);
-      // Now navigate to the game
-      window.location.href = "src/pvai/index.html"; // ✅ Adjust path as needed
+      localStorage.setItem("pvaiPlayerColor", humanColor);
+      console.log("AI Difficulty set to:", depth, "Human color:", humanColor);
+      window.location.href = "pvai/sci-damath/pvai-integer-scidamath.html";
     }
   });
 });

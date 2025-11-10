@@ -60,9 +60,10 @@ function restoreBoardState(state) {
   redScoreEl.textContent = redScore.toFixed(2);
   blueScoreEl.textContent = blueScore.toFixed(2);
   currentPlayerEl.textContent = currentPlayer;
-  const currentPlayerLabel = document.querySelector(".current-player-label");
-  if (currentPlayerLabel)
+  const currentPlayerLabel = document.querySelector(".current-turn-label");
+  if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
   mustCaptureWithPiece = null;
   if (state.mustCaptureWithPiece) {
     const { row, col } = state.mustCaptureWithPiece;
@@ -92,40 +93,67 @@ function undoMove() {
   let stepsBack = 1;
   if (gameMode === "pvai") {
     const lastTurn = turnHistory[currentTurnIndex];
-    if (lastTurn?.player === "blue") {
-      stepsBack = 2;
+    if (lastTurn?.player === window.aiColor) {
+      // Only step back 2 if there's a prior human move to return to
+      if (currentTurnIndex >= 2) {
+        stepsBack = 2;
+      } else {
+        // AI made the first move → undo just that one
+        stepsBack = 1;
+      }
     }
   }
 
   const targetIndex = currentTurnIndex - stepsBack;
   if (targetIndex < 0) {
+    // Should not happen with above guard, but safety fallback
     resetGame();
     return;
   }
 
-  // ✅ CRITICAL: Remove the undone turns from turnHistory
+  // Truncate history
   turnHistory = turnHistory.slice(0, targetIndex + 1);
   currentTurnIndex = targetIndex;
 
-  // Restore state
+  // Restore full board state
   restoreBoardState(turnHistory[currentTurnIndex].endState);
 
-  // Reset turn-related state
-  if (gameMode === "pvai") {
-    currentPlayer = "red";
-    currentPlayerEl.textContent = "red";
-    const label = document.querySelector(".current-player-label");
-    if (label) label.setAttribute("data-player", "red");
-    roundEl.className = "timer timer-red";
-  }
-
+  // Reset transient state
   mustCaptureWithPiece = null;
   selectedPiece = null;
   isTurnActive = false;
   currentTurnStartState = null;
 
-  // ✅ Now update the DOM — it will reflect truncated history
+  // Sync UI based on restored player
+  let displayPlayerText = currentPlayer;
+  if (gameMode === "pvai") {
+    displayPlayerText = currentPlayer === window.aiColor ? "AI" : "Human";
+  }
+  currentPlayerEl.textContent = displayPlayerText;
+  const currentPlayerLabel = document.querySelector(".current-turn-label");
+  if (currentPlayerLabel) {
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
+
+  // Restart round timer
+  if (roundInterval) clearInterval(roundInterval);
+  roundMinutes = 1;
+  roundSeconds = 0;
+  roundEl.className = "timer";
+  roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
+  startRoundTimer();
+
+  // Update move history display
   updateTurnHistoryDOM();
+
+  // If it's now AI's turn (e.g., after undoing a human response), let AI play
+  if (gameMode === "pvai" && currentPlayer === window.aiColor && !gameOver) {
+    setTimeout(() => {
+      if (!gameOver && currentPlayer === window.aiColor) {
+        makeAIMove();
+      }
+    }, 750);
+  }
 }
 
 function redoMove() {
@@ -146,7 +174,7 @@ function redoMove() {
 
   currentPlayer = entry.endState.currentPlayer;
   currentPlayerEl.textContent = currentPlayer;
-  const label = document.querySelector(".current-player-label");
+  const label = document.querySelector(".current-turn-label");
   if (label) label.setAttribute("data-player", currentPlayer);
   roundEl.className = "timer";
   roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");

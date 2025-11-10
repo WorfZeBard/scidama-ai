@@ -23,7 +23,7 @@ function attachInputHandlers() {
 }
 
 function handleBoardClick(e) {
-  if (gameMode === "pvai" && currentPlayer === "blue") {
+  if (gameMode === "pvai" && currentPlayer === window.aiColor) {
     return;
   }
   const piece = e.target.closest(".piece");
@@ -54,7 +54,7 @@ function handleBoardClick(e) {
 }
 
 function handleDragStart(e) {
-  if (gameMode === "pvai" && currentPlayer === "blue") {
+  if (gameMode === "pvai" && currentPlayer === window.aiColor) {
     e.preventDefault();
     return;
   }
@@ -88,7 +88,7 @@ function handleDragEnd(e) {
 
 function handleDrop(e) {
   e.preventDefault();
-  if (gameMode === "pvai" && currentPlayer === "blue") {
+  if (gameMode === "pvai" && currentPlayer === window.aiColor) {
     cleanupDrag();
     return;
   }

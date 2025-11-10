@@ -235,9 +235,11 @@ function updateTurnHistoryDOM() {
         entry.result >= 0 ? "positive" : "negative"
       }">${finalScore}</span>`;
     } else if (entry.type === "move") {
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: (${entry.value}) moved from (${dispStartRow},${
-        entry.startCol
-      }) to (${dispEndRow},${entry.endCol})`;
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: (${
+        entry.value
+      }) moved from (${dispStartRow},${entry.startCol}) to (${dispEndRow},${
+        entry.endCol
+      })`;
     } else if (entry.type === "promotion") {
       moveText = `<strong>${entry.player.toUpperCase()}</strong>: promoted to DAMA!`;
     } else if (entry.type === "final-tally") {
@@ -372,10 +374,14 @@ function calculateSciDamathScore(capturingPiece, capturedPiece, operator) {
   return Number((Math.round(finalResult * 100) / 100).toFixed(2));
 }
 
-function evaluateBoardState(board, redScore, blueScore) {
+function evaluateBoardStateFromPerspective(
+  board,
+  redScore,
+  blueScore,
+  forColor
+) {
   let redPieceValue = 0,
     bluePieceValue = 0;
-
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       const p = board[r][c];
@@ -388,12 +394,8 @@ function evaluateBoardState(board, redScore, blueScore) {
   const totalRed = redScore + redPieceValue;
   const totalBlue = blueScore + bluePieceValue;
 
-  // 🎯 Sci-Damath: lower score wins.
-  // So from Blue's perspective, we want to MINIMIZE (totalBlue - totalRed)
-  // But easier: return totalBlue (since Red is opponent, we assume Red plays optimally too)
-  // However, to keep minimax symmetric, return totalBlue - totalRed,
-  // and make Blue the MINIMIZING player.
-  return totalBlue - totalRed;
+  // Return the score of the player we care about (lower is better)
+  return forColor === "red" ? totalRed : totalBlue;
 }
 
 function resetGame() {
@@ -401,8 +403,27 @@ function resetGame() {
   blueScore = 0.0;
   redScoreEl.textContent = "0.00";
   blueScoreEl.textContent = "0.00";
+
+  // ✅ ALWAYS start with red
   currentPlayer = "red";
-  currentPlayerEl.textContent = "red";
+
+  if (gameMode === "pvai") {
+    const savedPlayerColor = localStorage.getItem("pvaiPlayerColor") || "red";
+    window.humanColor = savedPlayerColor;
+    window.aiColor = savedPlayerColor === "red" ? "blue" : "red";
+
+    // Display "Human" if red is human, else "AI"
+    const displayPlayer = currentPlayer === window.humanColor ? "Human" : "AI";
+    currentPlayerEl.textContent = displayPlayer;
+  } else {
+    currentPlayerEl.textContent = "red";
+  }
+
+  // Sync turn indicator styling
+  const currentPlayerLabel = document.querySelector(".current-turn-label");
+  if (currentPlayerLabel) {
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
   mustCaptureWithPiece = null;
   selectedPiece = null;
   nextMoveId = 0;
@@ -430,6 +451,14 @@ function resetGame() {
   if (replayInterval) clearInterval(replayInterval);
   if (errorMessageEl) errorMessageEl.hidden = true;
   placeInitialPieces();
+
+  if (gameMode === "pvai" && window.aiColor === "red") {
+    setTimeout(() => {
+      if (!gameOver && currentPlayer === "red") {
+        makeAIMove();
+      }
+    }, 750);
+  }
 }
 
 function playSound(soundName) {
@@ -617,72 +646,50 @@ function calculateCaptureScoreSimulated(
     default:
       result = 0;
   }
-  let multiplieriplier = 1;
-  if (isCapturingKing && isCapturedKing) multiplieriplier = 4;
-  else if (isCapturingKing || isCapturedKing) multiplieriplier = 2;
-  return Number((Math.round(result * multiplieriplier * 100) / 100).toFixed(2));
+  let multiplier = 1;
+  if (isCapturingKing && isCapturedKing) multiplier = 4;
+  else if (isCapturingKing || isCapturedKing) multiplier = 2;
+  return Number((Math.round(result * multiplier * 100) / 100).toFixed(2));
 }
 
-function minimax(
+function minimizeAIScore(
   board,
   depth,
   alpha,
   beta,
-  maximizingPlayer,
+  isAIturn,
   redScore,
-  blueScore
+  blueScore,
+  aiColor
 ) {
   if (depth === 0) {
-    return evaluateBoardState(board, redScore, blueScore);
+    return evaluateBoardStateFromPerspective(
+      board,
+      redScore,
+      blueScore,
+      aiColor
+    );
   }
 
-  const color = maximizingPlayer ? "red" : "blue";
+  const color = isAIturn ? aiColor : aiColor === "red" ? "blue" : "red";
   const moves = generateAllMoves(board, color);
 
-  if (maximizingPlayer) {
-    // Red's turn: tries to MAXIMIZE (blue - red) → i.e., hurt Blue
-    let maxEval = -Infinity;
-    for (const move of moves) {
-      const newBoard = applyLogicalMove(board, move);
-      let newRed = redScore;
-      let newBlue = blueScore;
+  if (moves.length === 0) {
+    return evaluateBoardStateFromPerspective(
+      board,
+      redScore,
+      blueScore,
+      aiColor
+    );
+  }
 
-      if (move.isCapture) {
-        const capturer = board[move.startRow][move.startCol];
-        const captured = board[move.captured[0][0]][move.captured[0][1]];
-        const op = DAMATH_LAYOUT[move.endRow][move.endCol];
-        const gain = calculateCaptureScoreSimulated(
-          capturer.value,
-          captured.value,
-          capturer.isKing,
-          captured.isKing,
-          op
-        );
-        newRed += gain;
-      }
-
-      const eval = minimax(
-        newBoard,
-        depth - 1,
-        alpha,
-        beta,
-        false,
-        newRed,
-        newBlue
-      );
-      maxEval = Math.max(maxEval, eval);
-      alpha = Math.max(alpha, eval);
-      if (beta <= alpha) break;
-    }
-    return maxEval;
-  } else {
-    // Blue's turn: tries to MINIMIZE (blue - red)
+  if (isAIturn) {
+    // AI's turn: minimize its own final score
     let minEval = Infinity;
     for (const move of moves) {
       const newBoard = applyLogicalMove(board, move);
       let newRed = redScore;
       let newBlue = blueScore;
-
       if (move.isCapture) {
         const capturer = board[move.startRow][move.startCol];
         const captured = board[move.captured[0][0]][move.captured[0][1]];
@@ -694,23 +701,67 @@ function minimax(
           captured.isKing,
           op
         );
-        newBlue += gain;
+        if (color === "red") newRed += gain;
+        else newBlue += gain;
       }
-
-      const eval = minimax(
+      const eval = minimizeAIScore(
         newBoard,
         depth - 1,
         alpha,
         beta,
-        true,
+        false, // opponent's turn next
         newRed,
-        newBlue
+        newBlue,
+        aiColor
       );
       minEval = Math.min(minEval, eval);
       beta = Math.min(beta, eval);
       if (beta <= alpha) break;
     }
     return minEval;
+  } else {
+    // Opponent's turn: assume they try to **minimize their own score**, but from AI's perspective,
+    // we must consider worst-case (i.e., opponent makes move that leads to **highest AI score**).
+    // However, in Sci-Damath, opponent also minimizes their own score — but AI cannot control that.
+    // So we assume opponent plays **optimally for themselves**, not adversarially against AI.
+    // But for simplicity and safety, we assume worst-case for AI: opponent maximizes AI's score.
+    // This is standard in adversarial games.
+
+    // 👉 So: opponent tries to MAXIMIZE AI's final score.
+    let maxEval = -Infinity;
+    for (const move of moves) {
+      const newBoard = applyLogicalMove(board, move);
+      let newRed = redScore;
+      let newBlue = blueScore;
+      if (move.isCapture) {
+        const capturer = board[move.startRow][move.startCol];
+        const captured = board[move.captured[0][0]][move.captured[0][1]];
+        const op = DAMATH_LAYOUT[move.endRow][move.endCol];
+        const gain = calculateCaptureScoreSimulated(
+          capturer.value,
+          captured.value,
+          capturer.isKing,
+          captured.isKing,
+          op
+        );
+        if (color === "red") newRed += gain;
+        else newBlue += gain;
+      }
+      const eval = minimizeAIScore(
+        newBoard,
+        depth - 1,
+        alpha,
+        beta,
+        true, // AI's turn next
+        newRed,
+        newBlue,
+        aiColor
+      );
+      maxEval = Math.max(maxEval, eval);
+      alpha = Math.max(alpha, eval);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
   }
 }
 
@@ -759,16 +810,23 @@ function getMaxCaptureCount(
 
 /**
  * Returns only the capture moves with the highest total capture potential.
- * Each move is evaluated by simulating the full chain it initiates.
+ * Enforces Mayor Dama rules:
+ *   - Maximize number of captures.
+ *   - If tied, prefer moves starting with a DAMA (king).
  */
 function getAllBestCaptureMoves(board, color) {
   const allCaptureMoves = generateAllCaptureMoves(board, color);
   if (allCaptureMoves.length === 0) return [];
 
-  // Map each move to its total capture count
+  // Evaluate each move's full capture potential
   const moveScores = allCaptureMoves.map((move) => {
+    const startingPiece = board[move.startRow][move.startCol];
     const newBoard = applyLogicalMove(board, move);
     const landed = newBoard[move.endRow][move.endCol];
+
+    // 🔴 CRITICAL: Use ORIGINAL piece's king status
+    const startedAsKing = startingPiece?.isKing || false;
+
     const further = getMaxCaptureCount(
       newBoard,
       move.endRow,
@@ -776,32 +834,253 @@ function getAllBestCaptureMoves(board, color) {
       landed,
       new Set([`${move.startRow},${move.startCol}`])
     );
-    const totalCaptures = move.captured.length + further; // usually 1 + further
-    return { move, totalCaptures, isKing: landed?.isKing };
+    const totalCaptures = move.captured.length + further;
+
+    return {
+      move,
+      totalCaptures,
+      startedAsKing, // ✅ Not landed.isKing!
+    };
   });
 
   // Find max capture count
   const maxCaptures = Math.max(...moveScores.map((s) => s.totalCaptures));
 
-  // Filter moves with max captures
+  // Filter to best capture count
   let bestMoves = moveScores.filter((s) => s.totalCaptures === maxCaptures);
 
-  // If tie, prefer moves that start with a king
-  const hasKing = bestMoves.some((s) => s.isKing);
-  if (hasKing) {
-    bestMoves = bestMoves.filter((s) => s.isKing);
+  // 👑 Mayor Dama Rule #3: If tie in captures, prefer DAMA (king) as starting piece
+  const hasDamaStarter = bestMoves.some((s) => s.startedAsKing);
+  if (hasDamaStarter) {
+    bestMoves = bestMoves.filter((s) => s.startedAsKing);
   }
 
   return bestMoves.map((s) => s.move);
+}
+
+/**
+ * Minimax variant that always minimizes the AI's own total score.
+ * - AI always minimizes its projected final score.
+ * - Opponent is assumed to play optimally to maximize AI's score (adversarial).
+ */
+function minimizeAIScore(
+  board,
+  depth,
+  alpha,
+  beta,
+  isAIturn,
+  redScore,
+  blueScore,
+  aiColor
+) {
+  if (depth === 0) {
+    // Evaluate from AI's perspective: return AI's projected total
+    let redPieceValue = 0,
+      bluePieceValue = 0;
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const p = board[r][c];
+        if (!p) continue;
+        const multiplier = p.isKing ? 2 : 1;
+        if (p.color === "red") redPieceValue += p.value * multiplier;
+        else bluePieceValue += p.value * multiplier;
+      }
+    }
+    const totalRed = redScore + redPieceValue;
+    const totalBlue = blueScore + bluePieceValue;
+    return aiColor === "red" ? totalRed : totalBlue;
+  }
+
+  const color = isAIturn ? aiColor : aiColor === "red" ? "blue" : "red";
+  const moves = generateAllMoves(board, color);
+
+  if (moves.length === 0) {
+    // Terminal: return AI's total score
+    let redPieceValue = 0,
+      bluePieceValue = 0;
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const p = board[r][c];
+        if (!p) continue;
+        const multiplier = p.isKing ? 2 : 1;
+        if (p.color === "red") redPieceValue += p.value * multiplier;
+        else bluePieceValue += p.value * multiplier;
+      }
+    }
+    const totalRed = redScore + redPieceValue;
+    const totalBlue = blueScore + bluePieceValue;
+    return aiColor === "red" ? totalRed : totalBlue;
+  }
+
+  if (isAIturn) {
+    // AI's turn: MINIMIZE its own score
+    let minEval = Infinity;
+    for (const move of moves) {
+      const newBoard = applyLogicalMove(board, move);
+      let newRed = redScore;
+      let newBlue = blueScore;
+      if (move.isCapture) {
+        const capturer = board[move.startRow][move.startCol];
+        const captured = board[move.captured[0][0]][move.captured[0][1]];
+        const op = DAMATH_LAYOUT[move.endRow][move.endCol];
+        const gain = calculateCaptureScoreSimulated(
+          capturer.value,
+          captured.value,
+          capturer.isKing,
+          captured.isKing,
+          op
+        );
+        if (color === "red") newRed += gain;
+        else newBlue += gain;
+      }
+      const eval = minimizeAIScore(
+        newBoard,
+        depth - 1,
+        alpha,
+        beta,
+        false,
+        newRed,
+        newBlue,
+        aiColor
+      );
+      minEval = Math.min(minEval, eval);
+      beta = Math.min(beta, eval);
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  } else {
+    // Opponent's turn: MAXIMIZE AI's score (adversarial assumption)
+    let maxEval = -Infinity;
+    for (const move of moves) {
+      const newBoard = applyLogicalMove(board, move);
+      let newRed = redScore;
+      let newBlue = blueScore;
+      if (move.isCapture) {
+        const capturer = board[move.startRow][move.startCol];
+        const captured = board[move.captured[0][0]][move.captured[0][1]];
+        const op = DAMATH_LAYOUT[move.endRow][move.endCol];
+        const gain = calculateCaptureScoreSimulated(
+          capturer.value,
+          captured.value,
+          capturer.isKing,
+          captured.isKing,
+          op
+        );
+        if (color === "red") newRed += gain;
+        else newBlue += gain;
+      }
+      const eval = minimizeAIScore(
+        newBoard,
+        depth - 1,
+        alpha,
+        beta,
+        true,
+        newRed,
+        newBlue,
+        aiColor
+      );
+      maxEval = Math.max(maxEval, eval);
+      alpha = Math.max(alpha, eval);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  }
+}
+
+function makeAIMove() {
+  if (gameOver || currentPlayer !== window.aiColor || replayMode) return;
+  const board = createLogicalBoard();
+  const color = window.aiColor;
+  const aiDepth = window.aiDepth || 2;
+
+  // Handle forced capture continuation
+  if (mustCaptureWithPiece) {
+    const sq = mustCaptureWithPiece.parentElement;
+    const startRow = parseInt(sq.dataset.row, 10);
+    const startCol = parseInt(sq.dataset.col, 10);
+    const piece = board[startRow][startCol];
+    if (piece && piece.color === color) {
+      const captureMoves = getImmediateCaptures(
+        board,
+        startRow,
+        startCol,
+        piece
+      );
+      if (captureMoves.length > 0) {
+        const bestContinuation = getAllBestCaptureMoves(board, color).find(
+          (m) => m.startRow === startRow && m.startCol === startCol
+        );
+        executeLogicalMove(bestContinuation || captureMoves[0]);
+        return;
+      }
+    }
+  }
+
+  // Get legal moves (enforce Mayor Dama)
+  const moves = getLegalMoves(board, color);
+  if (moves.length === 0) {
+    switchTurn();
+    return;
+  }
+
+  let bestMove = null;
+  let bestValue = Infinity; // We always minimize AI's score
+
+  for (const move of moves) {
+    const newBoard = applyLogicalMove(board, move);
+    let newRed = redScore;
+    let newBlue = blueScore;
+
+    if (move.isCapture) {
+      const capturer = board[move.startRow][move.startCol];
+      const captured = board[move.captured[0][0]][move.captured[0][1]];
+      const op = DAMATH_LAYOUT[move.endRow][move.endCol];
+      const gain = calculateCaptureScoreSimulated(
+        capturer.value,
+        captured.value,
+        capturer.isKing,
+        captured.isKing,
+        op
+      );
+      if (color === "red") newRed += gain;
+      else newBlue += gain;
+    }
+
+    const value = minimizeAIScore(
+      newBoard,
+      aiDepth - 1,
+      -Infinity,
+      Infinity,
+      false, // opponent's turn next
+      newRed,
+      newBlue,
+      color // AI's color
+    );
+
+    if (value < bestValue) {
+      bestValue = value;
+      bestMove = move;
+    }
+  }
+
+  let finalMove = bestMove;
+  if (!finalMove && moves.length > 0) {
+    // No "best move" found → choose randomly among legal moves
+    const randomIndex = Math.floor(Math.random() * moves.length);
+    finalMove = moves[randomIndex];
+  }
+
+  executeLogicalMove(finalMove);
 }
 
 function switchTurn() {
   mustCaptureWithPiece = null;
   currentPlayer = currentPlayer === "red" ? "blue" : "red";
   currentPlayerEl.textContent = currentPlayer;
-  const currentPlayerLabel = document.querySelector(".current-player-label");
-  if (currentPlayerLabel)
+  const currentPlayerLabel = document.querySelector(".current-turn-label");
+  if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
   if (roundInterval) clearInterval(roundInterval);
   roundMinutes = 1;
   roundSeconds = 0;
@@ -828,7 +1107,13 @@ function switchTurn() {
   // ✅ Update history display
   updateTurnHistoryDOM(); // ←←← ADD THIS
 
-  if (gameMode === "pvai" && currentPlayer === "blue") {
+  let displayPlayer = currentPlayer;
+  if (gameMode === "pvai") {
+    displayPlayer = currentPlayer === window.humanColor ? "Human" : "AI";
+  }
+  currentPlayerEl.textContent = displayPlayer;
+
+  if (gameMode === "pvai" && currentPlayer === window.aiColor) {
     setTimeout(() => makeAIMove(), 750);
   }
 }
@@ -874,9 +1159,11 @@ function appendMoveToHistoryDOM(entry) {
   } else if (entry.type === "move") {
     const dispStartRow = 7 - entry.startRow;
     const dispEndRow = 7 - entry.endCol;
-    moveText = `<strong>${entry.player.toUpperCase()}</strong>: (${entry.value}) moved from (${dispStartRow},${
-      entry.startCol
-    }) to (${dispEndRow},${entry.endCol})`;
+    moveText = `<strong>${entry.player.toUpperCase()}</strong>: (${
+      entry.value
+    }) moved from (${dispStartRow},${entry.startCol}) to (${dispEndRow},${
+      entry.endCol
+    })`;
   } else if (entry.type === "promotion") {
     moveText = `<strong>${entry.player.toUpperCase()}</strong>: promoted to DAMA!`;
   }
@@ -1024,7 +1311,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
         );
         if (furtherCaptures.length > 0) {
           mustCaptureWithPiece = piece;
-          if (gameMode === "pvai" && color === "blue") {
+          if (gameMode === "pvai" && color === window.aiColor) {
             setTimeout(() => {
               // Re-enforce Mayor Dama: pick best among further captures
               const newBoard = createLogicalBoard();
@@ -1117,130 +1404,6 @@ function getLegalMoves(board, color) {
   return allMoves;
 }
 
-function makeAIMove() {
-  if (gameOver || currentPlayer !== "blue" || replayMode) return;
-  const board = createLogicalBoard();
-  const color = "blue";
-
-  // Handle forced capture continuation
-  if (mustCaptureWithPiece) {
-    const sq = mustCaptureWithPiece.parentElement;
-    const startRow = parseInt(sq.dataset.row, 10);
-    const startCol = parseInt(sq.dataset.col, 10);
-    const piece = board[startRow][startCol];
-    if (piece && piece.color === color) {
-      const captureMoves = getImmediateCaptures(
-        board,
-        startRow,
-        startCol,
-        piece
-      );
-      if (captureMoves.length > 0) {
-        // Enforce Mayor Dama even in continuation
-        const bestContinuation = getAllBestCaptureMoves(board, "blue").find(
-          (m) => m.startRow === startRow && m.startCol === startCol
-        );
-        executeLogicalMove(bestContinuation || captureMoves[0]);
-        return;
-      }
-    }
-  }
-
-  // ✅ Use LEGAL moves (enforces Mayor Dama)
-  const moves = getLegalMoves(board, color);
-  if (moves.length === 0) {
-    switchTurn();
-    return;
-  }
-
-  let bestMove = null;
-  let bestValue = Infinity; // Blue minimizes (blue - red)
-  let bestCaptureCount = -1;
-  let bestImmediateScore = -Infinity; // higher is better
-  let bestPromotion = false;
-  let bestCentrality = -1;
-
-  for (const move of moves) {
-    const newBoard = applyLogicalMove(board, move);
-    const value = minimax(
-      newBoard,
-      aiDepth - 1,
-      -Infinity,
-      Infinity,
-      false, // Blue is minimizing
-      redScore,
-      blueScore
-    );
-
-    // 🔹 Capture chain length
-    const landed = newBoard[move.endRow][move.endCol];
-    const captureCount = move.isCapture
-      ? 1 +
-        getMaxCaptureCount(
-          newBoard,
-          move.endRow,
-          move.endCol,
-          landed,
-          new Set([`${move.startRow},${move.startCol}`])
-        )
-      : 0;
-
-    // 🔹 Promotion check
-    const promotesNow =
-      !board[move.startRow][move.startCol]?.isKing &&
-      ((color === "red" && move.endRow === 0) ||
-        (color === "blue" && move.endRow === 7));
-
-    // 🔹 Centrality
-    const centrality =
-      (1 - Math.abs(move.endRow - 3.5) / 4) *
-      (1 - Math.abs(move.endCol - 3.5) / 4);
-
-    let immediateScore = 0;
-    if (move.isCapture) {
-      const capturer = board[move.startRow][move.startCol];
-      const captured = board[move.captured[0][0]][move.captured[0][1]];
-      const op = DAMATH_LAYOUT[move.endRow][move.endCol];
-      immediateScore = calculateCaptureScoreSimulated(
-        capturer.value,
-        captured.value,
-        capturer.isKing,
-        captured.isKing,
-        op
-      );
-    }
-
-    // 🔹 Layered tie-breaking: value → captureCount → immediateScore → promotion → centrality
-    const isNewBest =
-      value < bestValue ||
-      (value === bestValue && captureCount > bestCaptureCount) ||
-      (value === bestValue &&
-        captureCount === bestCaptureCount &&
-        immediateScore > bestImmediateScore) ||
-      (value === bestValue &&
-        captureCount === bestCaptureCount &&
-        immediateScore === bestImmediateScore &&
-        promotesNow &&
-        !bestPromotion) ||
-      (value === bestValue &&
-        captureCount === bestCaptureCount &&
-        immediateScore === bestImmediateScore &&
-        promotesNow === bestPromotion &&
-        centrality > bestCentrality);
-
-    if (isNewBest) {
-      bestValue = value;
-      bestCaptureCount = captureCount;
-      bestImmediateScore = immediateScore;
-      bestPromotion = promotesNow;
-      bestCentrality = centrality;
-      bestMove = move;
-    }
-  }
-
-  executeLogicalMove(bestMove || moves[0]);
-}
-
 function showErrorMessage(message) {
   if (!errorMessageEl) return;
   errorMessageEl.textContent = message;
@@ -1275,4 +1438,3 @@ function getBestCaptureMove(board, color) {
   }
   return bestMove;
 }
-

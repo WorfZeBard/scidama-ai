@@ -603,7 +603,7 @@ function attachInputHandlers() {
 }
 
 function handleBoardClick(e) {
-  if (gameMode === "pvai" && currentPlayer === "blue") {
+  if (gameMode === "pvai" && currentPlayer === window.aiColor) {
     return;
   }
   const piece = e.target.closest(".piece");
@@ -634,7 +634,7 @@ function handleBoardClick(e) {
 }
 
 function handleDragStart(e) {
-  if (gameMode === "pvai" && currentPlayer === "blue") {
+  if (gameMode === "pvai" && currentPlayer === window.aiColor) {
     e.preventDefault();
     return;
   }
@@ -668,7 +668,7 @@ function handleDragEnd(e) {
 
 function handleDrop(e) {
   e.preventDefault();
-  if (gameMode === "pvai" && currentPlayer === "blue") {
+  if (gameMode === "pvai" && currentPlayer === window.aiColor) {
     cleanupDrag();
     return;
   }
@@ -767,7 +767,7 @@ function restoreBoardState(state) {
   redScoreEl.textContent = redScore.toFixed(2);
   blueScoreEl.textContent = blueScore.toFixed(2);
   currentPlayerEl.textContent = currentPlayer;
-  const currentPlayerLabel = document.querySelector(".current-player-label");
+  const currentPlayerLabel = document.querySelector(".current-turn-label");
   if (currentPlayerLabel)
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   mustCaptureWithPiece = null;
@@ -796,10 +796,11 @@ function undoMove() {
     return;
   }
 
+  // Determine how many turns to step back
   let stepsBack = 1;
   if (gameMode === "pvai") {
     const lastTurn = turnHistory[currentTurnIndex];
-    if (lastTurn?.player === "blue") {
+    if (lastTurn?.player === window.aiColor) {
       stepsBack = 2;
     }
   }
@@ -810,28 +811,42 @@ function undoMove() {
     return;
   }
 
-  // ✅ CRITICAL: Remove the undone turns from turnHistory
+  // Truncate history to the target turn
   turnHistory = turnHistory.slice(0, targetIndex + 1);
   currentTurnIndex = targetIndex;
 
-  // Restore state
+  // ✅ Restore the full state from history — INCLUDING currentPlayer
   restoreBoardState(turnHistory[currentTurnIndex].endState);
 
-  // Reset turn-related state
-  if (gameMode === "pvai") {
-    currentPlayer = "red";
-    currentPlayerEl.textContent = "red";
-    const label = document.querySelector(".current-player-label");
-    if (label) label.setAttribute("data-player", "red");
-    roundEl.className = "timer timer-red";
-  }
-
+  // Reset transient gameplay state
   mustCaptureWithPiece = null;
   selectedPiece = null;
   isTurnActive = false;
   currentTurnStartState = null;
 
-  // ✅ Now update the DOM — it will reflect truncated history
+  // ✅ Sync UI display based on the *restored* currentPlayer
+  let displayPlayerText = currentPlayer;
+  if (gameMode === "pvai") {
+    displayPlayerText = currentPlayer === window.aiColor ? "AI" : "Human";
+  }
+  currentPlayerEl.textContent = displayPlayerText;
+
+  const currentPlayerLabel = document.querySelector(".current-turn-label");
+  if (currentPlayerLabel) {
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
+
+  // Sync round timer styling
+  roundEl.className = "timer";
+  roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
+
+  // Restart the round timer for the current player
+  if (roundInterval) clearInterval(roundInterval);
+  roundMinutes = 1;
+  roundSeconds = 0;
+  startRoundTimer();
+
+  // ✅ Update move history DOM to reflect truncated state
   updateTurnHistoryDOM();
 }
 
@@ -853,7 +868,7 @@ function redoMove() {
 
   currentPlayer = entry.endState.currentPlayer;
   currentPlayerEl.textContent = currentPlayer;
-  const label = document.querySelector(".current-player-label");
+  const label = document.querySelector(".current-turn-label");
   if (label) label.setAttribute("data-player", currentPlayer);
   roundEl.className = "timer";
   roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
@@ -874,22 +889,21 @@ function stopReplay() {
 ================================================================================
 File: ./assets/js/12-init.js
 --------------------------------------------------------------------------------
+// assets/js/12-init.js
 document.addEventListener("DOMContentLoaded", () => {
   // Assign DOM references
   gameboard = document.getElementById("gameboard");
   redScoreEl = document.getElementById("red-score");
   blueScoreEl = document.getElementById("blue-score");
-  currentPlayerEl = document.getElementById("current-player");
+  currentPlayerEl = document.getElementById("current-turn");
   errorMessageEl = document.getElementById("error-message");
   sessionEl = document.getElementById("session-time");
   roundEl = document.getElementById("round-time");
-
   // Ensure all required elements exist
   if (!gameboard || !redScoreEl || !blueScoreEl || !currentPlayerEl) {
     console.error("Missing critical DOM elements. Check your HTML.");
     return;
   }
-
   // Initialize sounds
   sounds = {
     move: document.getElementById("move-sound"),
@@ -898,9 +912,9 @@ document.addEventListener("DOMContentLoaded", () => {
     gameStart: document.getElementById("game-start"),
     gameEnd: document.getElementById("game-end"),
   };
-
+  
   // Setup UI labels
-  const currentPlayerLabel = document.querySelector(".current-player-label");
+  const currentPlayerLabel = document.querySelector(".current-turn-label");
   if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   }
@@ -914,26 +928,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   window.aiDepth = loadedDepth;
-
   // Now update display using window.aiDepth
   const difficultyDisplay = document.getElementById("ai-difficulty-display");
   if (difficultyDisplay) {
     const labels = { 2: "Easy", 3: "Medium", 4: "Hard", 6: "Expert" };
     difficultyDisplay.textContent = labels[window.aiDepth] || "Custom";
   }
-
   // Sync the <select> dropdown
   const difficultySelect = document.getElementById("ai-difficulty");
   if (difficultySelect) {
     difficultySelect.value = window.aiDepth;
   }
-
   attachInputHandlers();
   resetGame();
 
+  if (gameMode === "pvai" && window.aiColor === "red") {
+    setTimeout(() => {
+      if (!gameOver && currentPlayer === "red") {
+        makeAIMove();
+      }
+    }, 750);
+  }
+
   setupDebugControls();
   localStorage.removeItem("aiDifficulty");
-
   // Sidebar toggle
   const toggleBtn = document.getElementById("toggle-controls");
   const sidebar = document.querySelector(".controls-sidebar");
@@ -1360,7 +1378,19 @@ function resetGame() {
   redScoreEl.textContent = "0.00";
   blueScoreEl.textContent = "0.00";
   currentPlayer = "red";
-  currentPlayerEl.textContent = "red";
+  if (gameMode === "pvai") {
+    // Re-apply AI/Human color logic
+    const savedPlayerColor = localStorage.getItem("pvaiPlayerColor") || "red";
+    window.humanColor = savedPlayerColor;
+    window.aiColor = savedPlayerColor === "red" ? "blue" : "red";
+    if (window.humanColor === "blue") {
+      currentPlayer = "red"; // AI starts
+    }
+    const displayPlayer = currentPlayer === window.humanColor ? "Human" : "AI";
+    currentPlayerEl.textContent = displayPlayer;
+  } else {
+    currentPlayerEl.textContent = "red";
+  }
   mustCaptureWithPiece = null;
   selectedPiece = null;
   nextMoveId = 0;
@@ -1753,11 +1783,150 @@ function getAllBestCaptureMoves(board, color) {
   return bestMoves.map((s) => s.move);
 }
 
+
+function makeAIMove() {
+  if (gameOver || currentPlayer !== window.aiColor || replayMode) return;
+  const board = createLogicalBoard();
+  const color = window.aiColor; // ✅ Dynamic AI color (was hardcoded to "blue")
+
+  // Handle forced capture continuation
+  if (mustCaptureWithPiece) {
+    const sq = mustCaptureWithPiece.parentElement;
+    const startRow = parseInt(sq.dataset.row, 10);
+    const startCol = parseInt(sq.dataset.col, 10);
+    const piece = board[startRow][startCol];
+    if (piece && piece.color === color) {
+      const captureMoves = getImmediateCaptures(
+        board,
+        startRow,
+        startCol,
+        piece
+      );
+      if (captureMoves.length > 0) {
+        // Enforce Mayor Dama: pick best continuation among moves starting from this piece
+        const bestContinuation = getAllBestCaptureMoves(board, color).find(
+          (m) => m.startRow === startRow && m.startCol === startCol
+        );
+        executeLogicalMove(bestContinuation || captureMoves[0]);
+        return;
+      }
+    }
+  }
+
+  // ✅ Use LEGAL moves (enforces Mayor Dama for initial move)
+  const moves = getLegalMoves(board, color);
+  if (moves.length === 0) {
+    switchTurn();
+    return;
+  }
+
+  let bestMove = null;
+  let bestValue = Infinity; // Blue minimizes (blue - red); Red maximizes → handled via `color`
+  let bestCaptureCount = -1;
+  let bestImmediateScore = -Infinity;
+  let bestPromotion = false;
+  let bestCentrality = -1;
+  let bestTieBreaker = 0;
+
+  for (const move of moves) {
+    const newBoard = applyLogicalMove(board, move);
+    // Determine if AI is maximizing (red) or minimizing (blue)
+    const isMaximizing = color;
+    const value = minimax(
+      newBoard,
+      aiDepth - 1,
+      -Infinity,
+      Infinity,
+      !isMaximizing, // Next player is opponent
+      redScore,
+      blueScore
+    );
+
+    // 🔹 Capture chain length
+    const landed = newBoard[move.endRow][move.endCol];
+    const captureCount = move.isCapture
+      ? 1 +
+        getMaxCaptureCount(
+          newBoard,
+          move.endRow,
+          move.endCol,
+          landed,
+          new Set([`${move.startRow},${move.startCol}`])
+        )
+      : 0;
+
+    // 🔹 Promotion check
+    const promotesNow =
+      !board[move.startRow][move.startCol]?.isKing &&
+      ((color === "red" && move.endRow === 0) ||
+        (color === "blue" && move.endRow === 7));
+
+    // 🔹 Centrality score
+    const centrality =
+      (1 - Math.abs(move.endRow - 3.5) / 4) *
+      (1 - Math.abs(move.endCol - 3.5) / 4);
+
+    // 🔹 Immediate capture score (for tie-breaking)
+    let immediateScore = 0;
+    if (move.isCapture) {
+      const capturer = board[move.startRow][move.startCol];
+      const captured = board[move.captured[0][0]][move.captured[0][1]];
+      const op = DAMATH_LAYOUT[move.endRow][move.endCol];
+      immediateScore = calculateCaptureScoreSimulated(
+        capturer.value,
+        captured.value,
+        capturer.isKing,
+        captured.isKing,
+        op
+      );
+    }
+
+    // Generate a tiny random tie-breaker for this move (only used if everything else is equal)
+    const tieBreaker = Math.random();
+
+    // 🔹 Layered tie-breaking: value → captureCount → immediateScore → promotion → centrality → tieBraker
+    const isNewBest =
+      (isMaximizing ? value > bestValue : value < bestValue) ||
+      (value === bestValue && captureCount > bestCaptureCount) ||
+      (value === bestValue &&
+        captureCount === bestCaptureCount &&
+        immediateScore > bestImmediateScore) ||
+      (value === bestValue &&
+        captureCount === bestCaptureCount &&
+        immediateScore === bestImmediateScore &&
+        promotesNow &&
+        !bestPromotion) ||
+      (value === bestValue &&
+        captureCount === bestCaptureCount &&
+        immediateScore === bestImmediateScore &&
+        promotesNow === bestPromotion &&
+        centrality > bestCentrality) ||
+      (value === bestValue &&
+        captureCount === bestCaptureCount &&
+        immediateScore === bestImmediateScore &&
+        promotesNow === bestPromotion &&
+        centrality === bestCentrality &&
+        tieBreaker > bestTieBreaker);
+
+    if (isNewBest) {
+      bestValue = value;
+      bestCaptureCount = captureCount;
+      bestImmediateScore = immediateScore;
+      bestPromotion = promotesNow;
+      bestCentrality = centrality;
+      bestTieBreaker = tieBreaker;
+      bestMove = move;
+    }
+  }
+
+  executeLogicalMove(bestMove || moves[0]);
+}
+
 function switchTurn() {
   mustCaptureWithPiece = null;
   currentPlayer = currentPlayer === "red" ? "blue" : "red";
   currentPlayerEl.textContent = currentPlayer;
-  const currentPlayerLabel = document.querySelector(".current-player-label");
+  const currentPlayerLabel = document.querySelector(".current-turn-label");
   if (currentPlayerLabel)
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   if (roundInterval) clearInterval(roundInterval);
@@ -1786,7 +1955,13 @@ function switchTurn() {
   // ✅ Update history display
   updateTurnHistoryDOM(); // ←←← ADD THIS
 
-  if (gameMode === "pvai" && currentPlayer === "blue") {
+  let displayPlayer = currentPlayer;
+  if (gameMode === "pvai") {
+    displayPlayer = currentPlayer === window.humanColor ? "Human" : "AI";
+  }
+  currentPlayerEl.textContent = displayPlayer;
+
+  if (gameMode === "pvai" && currentPlayer === window.aiColor) {
     setTimeout(() => makeAIMove(), 750);
   }
 }
@@ -1982,7 +2157,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
         );
         if (furtherCaptures.length > 0) {
           mustCaptureWithPiece = piece;
-          if (gameMode === "pvai" && color === "blue") {
+          if (gameMode === "pvai" && color === window.aiColor) {
             setTimeout(() => {
               // Re-enforce Mayor Dama: pick best among further captures
               const newBoard = createLogicalBoard();
@@ -2073,130 +2248,6 @@ function getLegalMoves(board, color) {
     return getAllBestCaptureMoves(board, color);
   }
   return allMoves;
-}
-
-function makeAIMove() {
-  if (gameOver || currentPlayer !== "blue" || replayMode) return;
-  const board = createLogicalBoard();
-  const color = "blue";
-
-  // Handle forced capture continuation
-  if (mustCaptureWithPiece) {
-    const sq = mustCaptureWithPiece.parentElement;
-    const startRow = parseInt(sq.dataset.row, 10);
-    const startCol = parseInt(sq.dataset.col, 10);
-    const piece = board[startRow][startCol];
-    if (piece && piece.color === color) {
-      const captureMoves = getImmediateCaptures(
-        board,
-        startRow,
-        startCol,
-        piece
-      );
-      if (captureMoves.length > 0) {
-        // Enforce Mayor Dama even in continuation
-        const bestContinuation = getAllBestCaptureMoves(board, "blue").find(
-          (m) => m.startRow === startRow && m.startCol === startCol
-        );
-        executeLogicalMove(bestContinuation || captureMoves[0]);
-        return;
-      }
-    }
-  }
-
-  // ✅ Use LEGAL moves (enforces Mayor Dama)
-  const moves = getLegalMoves(board, color);
-  if (moves.length === 0) {
-    switchTurn();
-    return;
-  }
-
-  let bestMove = null;
-  let bestValue = Infinity; // Blue minimizes (blue - red)
-  let bestCaptureCount = -1;
-  let bestImmediateScore = -Infinity; // higher is better
-  let bestPromotion = false;
-  let bestCentrality = -1;
-
-  for (const move of moves) {
-    const newBoard = applyLogicalMove(board, move);
-    const value = minimax(
-      newBoard,
-      aiDepth - 1,
-      -Infinity,
-      Infinity,
-      false, // Blue is minimizing
-      redScore,
-      blueScore
-    );
-
-    // 🔹 Capture chain length
-    const landed = newBoard[move.endRow][move.endCol];
-    const captureCount = move.isCapture
-      ? 1 +
-        getMaxCaptureCount(
-          newBoard,
-          move.endRow,
-          move.endCol,
-          landed,
-          new Set([`${move.startRow},${move.startCol}`])
-        )
-      : 0;
-
-    // 🔹 Promotion check
-    const promotesNow =
-      !board[move.startRow][move.startCol]?.isKing &&
-      ((color === "red" && move.endRow === 0) ||
-        (color === "blue" && move.endRow === 7));
-
-    // 🔹 Centrality
-    const centrality =
-      (1 - Math.abs(move.endRow - 3.5) / 4) *
-      (1 - Math.abs(move.endCol - 3.5) / 4);
-
-    let immediateScore = 0;
-    if (move.isCapture) {
-      const capturer = board[move.startRow][move.startCol];
-      const captured = board[move.captured[0][0]][move.captured[0][1]];
-      const op = DAMATH_LAYOUT[move.endRow][move.endCol];
-      immediateScore = calculateCaptureScoreSimulated(
-        capturer.value,
-        captured.value,
-        capturer.isKing,
-        captured.isKing,
-        op
-      );
-    }
-
-    // 🔹 Layered tie-breaking: value → captureCount → immediateScore → promotion → centrality
-    const isNewBest =
-      value < bestValue ||
-      (value === bestValue && captureCount > bestCaptureCount) ||
-      (value === bestValue &&
-        captureCount === bestCaptureCount &&
-        immediateScore > bestImmediateScore) ||
-      (value === bestValue &&
-        captureCount === bestCaptureCount &&
-        immediateScore === bestImmediateScore &&
-        promotesNow &&
-        !bestPromotion) ||
-      (value === bestValue &&
-        captureCount === bestCaptureCount &&
-        immediateScore === bestImmediateScore &&
-        promotesNow === bestPromotion &&
-        centrality > bestCentrality);
-
-    if (isNewBest) {
-      bestValue = value;
-      bestCaptureCount = captureCount;
-      bestImmediateScore = immediateScore;
-      bestPromotion = promotesNow;
-      bestCentrality = centrality;
-      bestMove = move;
-    }
-  }
-
-  executeLogicalMove(bestMove || moves[0]);
 }
 
 function showErrorMessage(message) {
@@ -2386,19 +2437,22 @@ pvaiButtons.forEach(btn => {
   });
 });
 
-// Handle difficulty selection
+// assets/js/menu.js
+// REPLACE the existing difficulty button click handler with this:
 document.querySelectorAll(".difficulty-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const depth = parseInt(btn.getAttribute("ai-difficulty"), 10);
+    const playerColorSelect = document.getElementById("player-color");
+    const humanColor = playerColorSelect ? playerColorSelect.value : "red";
+    
     if ([2, 3, 4, 6].includes(depth)) {
       localStorage.setItem("aiDepth", String(depth));
-      console.log("AI Difficulty set to:", depth);
-      // Now navigate to the game
-      window.location.href = "src/pvai/index.html"; // ✅ Adjust path as needed
+      localStorage.setItem("pvaiPlayerColor", humanColor);
+      console.log("AI Difficulty set to:", depth, "Human color:", humanColor);
+      window.location.href = "pvai/sci-damath/pvai-integer-scidamath.html";
     }
   });
 });
-
 ================================================================================
 
 ================================================================================
@@ -2435,6 +2489,20 @@ function setupDebugControls() {
   const difficultySelect = document.getElementById("ai-difficulty");
   const rotateBtn = document.getElementById("rotate-board-180");
   const boardWrapper = document.querySelector(".board-wrapper");
+  const howToPlayBtn = document.getElementById("how-to-play");
+  if (howToPlayBtn) {
+    howToPlayBtn.addEventListener("click", () => {
+      const modal = document.getElementById("how-to-play-modal");
+      if (modal) modal.hidden = false;
+    });
+  }
+
+  // Universal modal close
+  document.querySelectorAll(".modal-close").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      btn.closest(".modal").hidden = true;
+    });
+  });
 
   if (rotateBtn && boardWrapper) {
     rotateBtn.addEventListener("click", () => {
@@ -2463,61 +2531,6 @@ function setupDebugControls() {
       // Also sync the <select> element itself (optional but good)
       difficultySelect.value = newDepth;
     });
-  }
-
-  // Rotate board 180 degrees (for debugging / opponent view)
-  function rotateBoard() {
-    const pieces = document.querySelectorAll(".piece");
-    const newPositions = [];
-
-    // 1. Collect all piece data
-    pieces.forEach((piece) => {
-      const square = piece.parentElement;
-      const row = parseInt(square.dataset.row, 10);
-      const col = parseInt(square.dataset.col, 10);
-      const color = piece.classList.contains("red") ? "red" : "blue";
-      const isKing = piece.classList.contains("king");
-      const value = piece.dataset.value;
-      newPositions.push({ row, col, color, isKing, value, element: piece });
-    });
-
-    // 2. Remove all pieces
-    pieces.forEach((p) => p.remove());
-
-    // 3. Re-add them at rotated positions
-    newPositions.forEach(({ row, col, color, isKing, value }) => {
-      const newRow = 7 - row;
-      const newCol = 7 - col;
-      const targetSquare = document.querySelector(
-        `.square[data-row="${newRow}"][data-col="${newCol}"]`
-      );
-      if (!targetSquare) return;
-
-      const piece = document.createElement("div");
-      piece.classList.add("piece", color);
-      piece.dataset.value = value;
-      if (isKing) piece.classList.add("king");
-
-      const label = document.createElement("span");
-      label.classList.add("piece-number");
-      label.textContent = value;
-      piece.appendChild(label);
-
-      // Preserve tab index and draggable for input
-      piece.tabIndex = 0;
-      piece.draggable = true;
-
-      targetSquare.appendChild(piece);
-    });
-
-    // Optional: flip current player label visually (does NOT change turn!)
-    const currentPlayerLabel = document.querySelector(".current-player-label");
-    if (currentPlayerLabel) {
-      currentPlayerLabel.classList.toggle("rotated");
-    }
-
-    // Optional: add a visual cue that board is rotated
-    document.body.classList.toggle("board-rotated");
   }
 
   if (toggle) {

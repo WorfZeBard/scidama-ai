@@ -1,96 +1,145 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sci-Damath</title>
-  <link rel="stylesheet" href="assets/css/styles.css" />
-  <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
-</head>
-<body class="menu-screen">
-  <!-- Background board (no pieces) -->
-  <div id="menu-board-background" aria-hidden="true"></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sci-Damath</title>
+    <link rel="stylesheet" href="assets/css/styles.css" />
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+  </head>
+  <body class="menu-screen">
+    <!-- Background board (no pieces) -->
+    <div id="menu-board-background" aria-hidden="true"></div>
 
-  <!-- Main menu content -->
-  <div id="main-menu" class="menu-content">
-    <h1 id="menu-title">Sci-Damath</h1>
-    <div class="menu-buttons">
-      <button id="btn-pvp" class="menu-btn">Player vs Player</button>
-      <button id="btn-pvai" class="menu-btn">Player vs AI</button>
-      <button id="btn-options" class="menu-btn">Options</button>
-      <button id="btn-debug" class="menu-btn">Debug Mode</button>
-    </div>
-  </div>
-
-  <!-- Player vs Player Modal -->
-  <div id="pvp-modal" class="modal" hidden>
-    <div class="modal-content">
-      <h2>Player vs Player</h2>
-      <div class="variant-buttons">
-        <button class="variant-btn disabled" disabled>Counting Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Whole Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Fraction Sci-Damaths</button>
-        <button class="variant-btn" data-variant="integer">Integer Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Rational Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Radical Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Polynomial Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Custom Mode</button>
+    <!-- Main menu content -->
+    <div id="main-menu" class="menu-content">
+      <h1 id="menu-title">Sci-Damath</h1>
+      <div class="menu-buttons">
+        <button id="btn-pvp" class="menu-btn">Player vs Player</button>
+        <button id="btn-pvai" class="menu-btn">Player vs AI</button>
+        <button id="btn-options" class="menu-btn">Options</button>
+        <button id="btn-debug" class="menu-btn">Debug Mode</button>
       </div>
-      <button class="modal-close">&larr; Back</button>
     </div>
-  </div>
 
-  <!-- Player vs AI Modal -->
-  <div id="pvai-modal" class="modal" hidden>
-    <div class="modal-content">
-      <h2>Player vs AI</h2>
-      <div class="variant-buttons">
-        <button class="variant-btn disabled" disabled>Counting Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Whole Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Fraction Sci-Damaths</button>
-        <button class="variant-btn" data-variant="integer-ai">Integer Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Rational Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Radical Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Polynomial Sci-Damaths</button>
-        <button class="variant-btn disabled" disabled>Custom Mode</button>
+    <!-- Player vs Player Modal -->
+    <div id="pvp-modal" class="modal" hidden>
+      <div class="modal-content">
+        <h2>Player vs Player</h2>
+        <div class="variant-buttons">
+          <button class="variant-btn disabled" disabled>
+            Counting Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>
+            Whole Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>
+            Fraction Sci-Damaths
+          </button>
+          <button class="variant-btn" data-variant="integer">
+            Integer Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>
+            Rational Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>
+            Radical Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>
+            Polynomial Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>Custom Mode</button>
+        </div>
+        <button class="modal-close">&larr; Back</button>
       </div>
-      <button class="modal-close">&larr; Back</button>
     </div>
-  </div>
 
-  <!-- Options Modal -->
-<div id="options-modal" class="modal" hidden>
-  <div class="modal-content">
-    <h2>Options</h2>
-    <div class="options-content">
-      <div class="option-group">
-        <label for="theme-select">Theme:</label>
-        <select id="theme-select">
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-          <option value="system">System</option>
+    <!-- Player vs AI Modal -->
+    <div id="pvai-modal" class="modal" hidden>
+      <div class="modal-content">
+        <h2>Player vs AI</h2>
+        <div class="variant-buttons">
+          <button class="variant-btn disabled" disabled>
+            Counting Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>
+            Whole Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>
+            Fraction Sci-Damaths
+          </button>
+          <button class="variant-btn" data-variant="integer-ai">
+            Integer Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>
+            Rational Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>
+            Radical Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>
+            Polynomial Sci-Damaths
+          </button>
+          <button class="variant-btn disabled" disabled>Custom Mode</button>
+        </div>
+        <button class="modal-close">&larr; Back</button>
+      </div>
+    </div>
+
+    <!-- Options Modal -->
+    <div id="options-modal" class="modal" hidden>
+      <div class="modal-content">
+        <h2>Options</h2>
+        <div class="options-content">
+          <div class="option-group">
+            <label for="theme-select">Theme:</label>
+            <select id="theme-select">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="system">System</option>
+            </select>
+          </div>
+        </div>
+        <button class="modal-close">&larr; Back</button>
+      </div>
+    </div>
+
+    <!-- AI Difficulty Modal -->
+    <div
+      id="difficulty-modal"
+      class="modal"
+      hidden
+      role="dialog"
+      aria-labelledby="difficulty-title"
+    >
+      <div class="modal-content">
+        <div class="option-group">
+        <label for="player-color">Play as:</label>
+        <select id="player-color">
+          <option value="red">Red (First)</option>
+          <option value="blue">Blue (Second)</option>
         </select>
       </div>
+        <h2 id="difficulty-title">Select Difficulty</h2>
+        <p>How challenging should the AI be?</p>
+        <div class="difficulty-options">
+          <button class="difficulty-btn" ai-difficulty="2" value="2">
+            Easy
+          </button>
+          <button class="difficulty-btn" ai-difficulty="3" value="3">
+            Medium
+          </button>
+          <button class="difficulty-btn" ai-difficulty="4" value="4">
+            Hard
+          </button>
+          <button class="difficulty-btn" ai-difficulty="6" value="6">
+            Expert
+          </button>
+        </div>
+        <button class="modal-close">Cancel</button>
+      </div>
     </div>
-    <button class="modal-close">&larr; Back</button>
-  </div>
-</div>
-
-<!-- AI Difficulty Modal -->
-<div id="difficulty-modal" class="modal" hidden role="dialog" aria-labelledby="difficulty-title">
-  <div class="modal-content">
-    <h2 id="difficulty-title">Select Difficulty</h2>
-    <p>How challenging should the AI be?</p>
-    <div class="difficulty-options">
-      <button class="difficulty-btn" ai-difficulty="2" value="2">Easy</button>
-      <button class="difficulty-btn" ai-difficulty="3" value="3">Medium</button>
-      <button class="difficulty-btn" ai-difficulty="4" value="4">Hard</button>
-      <button class="difficulty-btn" ai-difficulty="6" value="6">Expert</button>
-    </div>
-    <button class="modal-close">Cancel</button>
-  </div>
-</div>
-  <script src="assets/js/menu.js"></script>
-  <script src="assets/js/theme.js"></script>
-</body>
+    <script src="assets/js/menu.js"></script>
+    <script src="assets/js/theme.js"></script>
+  </body>
 </html>
