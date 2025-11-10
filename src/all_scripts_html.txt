@@ -1,0 +1,609 @@
+--- Combined file for HTML ---
+
+================================================================================
+File: ./index.html
+--------------------------------------------------------------------------------
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sci-Damath</title>
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+</head>
+<body class="menu-screen">
+  <!-- Background board (no pieces) -->
+  <div id="menu-board-background" aria-hidden="true"></div>
+
+  <!-- Main menu content -->
+  <div id="main-menu" class="menu-content">
+    <h1 id="menu-title">Sci-Damath</h1>
+    <div class="menu-buttons">
+      <button id="btn-pvp" class="menu-btn">Player vs Player</button>
+      <button id="btn-pvai" class="menu-btn">Player vs AI</button>
+      <button id="btn-options" class="menu-btn">Options</button>
+      <button id="btn-debug" class="menu-btn">Debug Mode</button>
+    </div>
+  </div>
+
+  <!-- Player vs Player Modal -->
+  <div id="pvp-modal" class="modal" hidden>
+    <div class="modal-content">
+      <h2>Player vs Player</h2>
+      <div class="variant-buttons">
+        <button class="variant-btn disabled" disabled>Counting Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Whole Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Fraction Sci-Damaths</button>
+        <button class="variant-btn" data-variant="integer">Integer Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Rational Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Radical Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Polynomial Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Custom Mode</button>
+      </div>
+      <button class="modal-close">&larr; Back</button>
+    </div>
+  </div>
+
+  <!-- Player vs AI Modal -->
+  <div id="pvai-modal" class="modal" hidden>
+    <div class="modal-content">
+      <h2>Player vs AI</h2>
+      <div class="variant-buttons">
+        <button class="variant-btn disabled" disabled>Counting Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Whole Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Fraction Sci-Damaths</button>
+        <button class="variant-btn" data-variant="integer-ai">Integer Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Rational Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Radical Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Polynomial Sci-Damaths</button>
+        <button class="variant-btn disabled" disabled>Custom Mode</button>
+      </div>
+      <button class="modal-close">&larr; Back</button>
+    </div>
+  </div>
+
+  <!-- Options Modal -->
+<div id="options-modal" class="modal" hidden>
+  <div class="modal-content">
+    <h2>Options</h2>
+    <div class="options-content">
+      <div class="option-group">
+        <label for="theme-select">Theme:</label>
+        <select id="theme-select">
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+          <option value="system">System</option>
+        </select>
+      </div>
+    </div>
+    <button class="modal-close">&larr; Back</button>
+  </div>
+</div>
+
+<!-- AI Difficulty Modal -->
+<div id="difficulty-modal" class="modal" hidden role="dialog" aria-labelledby="difficulty-title">
+  <div class="modal-content">
+    <h2 id="difficulty-title">Select Difficulty</h2>
+    <p>How challenging should the AI be?</p>
+    <div class="difficulty-options">
+      <button class="difficulty-btn" ai-difficulty="2" value="2">Easy</button>
+      <button class="difficulty-btn" ai-difficulty="3" value="3">Medium</button>
+      <button class="difficulty-btn" ai-difficulty="4" value="4">Hard</button>
+      <button class="difficulty-btn" ai-difficulty="6" value="6">Expert</button>
+    </div>
+    <button class="modal-close">Cancel</button>
+  </div>
+</div>
+  <script src="assets/js/menu.js"></script>
+  <script src="assets/js/theme.js"></script>
+</body>
+</html>
+================================================================================
+
+================================================================================
+File: ./pvai/sci-damath/pvai-integer-scidamath.html
+--------------------------------------------------------------------------------
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Sci-Damath Offline - Human vs AI" />
+    <title>Sci-Damath Offline - Human vs AI</title>
+    <link rel="stylesheet" href="../../assets/css/styles.css" />
+    <link rel="icon" type="image/x-icon" href="../../assets/favicon.ico" />
+  </head>
+  <body>
+    <!-- Game Screen -->
+    <main id="game-screen" class="game-screen" tabindex="-1">
+      <div class="game-container">
+        <!-- CENTERED GAME CONTENT -->
+        <div class="centered-game-content">
+          <div class="game-layout">
+            <!-- Stats Sidebar (Score & Timers) -->
+            <aside class="sidebar stats-sidebar" aria-label="Game stats">
+              <section class="scoreboard" aria-label="Scoreboard">
+                <div class="score red">
+                  <h2>Human Score</h2>
+                  <span id="red-score">0.00</span>
+                </div>
+                <div class="score blue">
+                  <h2>AI Score</h2>
+                  <span id="blue-score">0.00</span>
+                </div>
+              </section>
+
+              <section class="timers" aria-label="Timers">
+                <div class="timer-wrapper">
+                  <span class="timer-label">Session:</span>
+                  <span id="session-time">20:00</span>
+                </div>
+                <div class="timer-wrapper">
+                  <span class="timer-label">Round:</span>
+                  <span id="round-time">1:00</span>
+                </div>
+                <div class="current-player-label" data-player="red">
+                  Current Player: <span id="current-player">Human</span>
+                </div>
+                <div class="ai-difficulty-label">
+                  AI Difficulty: <span id="ai-difficulty-display"></span>
+                </div>
+              </section>
+            </aside>
+
+            <!-- Gameboard -->
+            <div class="board-wrapper">
+              <section
+                id="gameboard"
+                tabindex="0"
+                aria-label="Gameboard"
+                aria-describedby="game-instructions"
+              ></section>
+            </div>
+
+            <!-- Move History & Actions -->
+            <aside
+              class="sidebar actions-sidebar"
+              aria-label="Move history and actions"
+            >
+              <section id="move-history">
+                <h2 class="move-history-header">Move History</h2>
+                <div class="move-history-scrollable">
+                  <ul id="move-history-content" aria-live="polite"></ul>
+                </div>
+              </section>
+
+              <div class="action-buttons">
+                <button id="surrender">Surrender</button>
+                <button id="agree-finish">Agree to Finish</button>
+                <button id="toggle-transparency">Show Symbols</button>
+                <button id="undo">Undo</button>
+                <button id="toggle-dark-mode">Dark Mode</button>
+                <button id="back-to-menu">← Back to Menu</button>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <div id="game-instructions" hidden>
+        Sci-Damath is a mathematical board game. You are playing against AI.
+      </div>
+    </main>
+
+    <!-- Sounds -->
+    <div id="sounds" aria-hidden="true">
+      <audio
+        id="move-sound"
+        src="../../assets/sounds/move.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="capture-sound"
+        src="../../assets/sounds/capture.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="move-promotion001"
+        src="../../assets/sounds/promotion.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="game-end"
+        src="../../assets/sounds/game-end.mp3"
+        preload="auto"
+      ></audio>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div
+      id="confirmation-modal"
+      class="modal"
+      hidden
+      role="dialog"
+      aria-labelledby="confirmation-title"
+    >
+      <div class="modal-content">
+        <h2 id="confirmation-title">Confirm Action</h2>
+        <div id="confirmation-message"></div>
+        <div class="modal-buttons">
+          <button id="confirm-yes" class="btn-primary">Yes</button>
+          <button id="confirm-no" class="btn-primary">No</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="modal" hidden>
+      <div class="modal-content">
+        <h3>Game Over</h3>
+        <div id="game-over-message"></div>
+        <div class="modal-buttons">
+          <button id="new-game-btn" class="btn-primary">New Game</button>
+          <button id="close-modal" class="btn-primary">Close</button>
+        </div>
+      </div>
+    </div>
+    <script src="../../assets/js/1-config.js"></script>
+    <script src="../../assets/js/2-state.js"></script>
+    <script src="../../assets/js/3-logic.js"></script>
+    <script src="../../assets/js/5-theme.js"></script>
+    <script src="../../assets/js/6-dom.js"></script>
+    <script src="../../assets/js/7-gameflow.js"></script>
+    <script src="../../assets/js/8-history.js"></script>
+    <script src="../../assets/js/9-input.js"></script>
+    <script src="../../assets/js/10-timers.js"></script>
+    <script src="../../assets/js/11-ui-controls.js"></script>
+    <script src="../../assets/js/12-init.js"></script>
+  </body>
+</html>
+
+================================================================================
+
+================================================================================
+File: ./debug_mode/debug_mode.html
+--------------------------------------------------------------------------------
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Sci-Damath Offline - Human vs AI" />
+    <title>Sci-Damath Offline - Human vs AI</title>
+    <link rel="stylesheet" href="../assets/css/styles.css" />
+    <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  </head>
+  <body>
+    <!-- Game Screen -->
+    <main id="game-screen" class="game-screen" tabindex="-1">
+      <div class="game-container">
+        <!-- CENTERED GAME CONTENT -->
+        <div class="centered-game-content">
+          <div class="game-layout">
+            <!-- Stats Sidebar (Score & Timers) -->
+            <aside class="sidebar stats-sidebar" aria-label="Game stats">
+              <section class="scoreboard" aria-label="Scoreboard">
+                <div class="score red">
+                  <h2>Human Score</h2>
+                  <span id="red-score">0.00</span>
+                </div>
+                <div class="score blue">
+                  <h2>AI Score</h2>
+                  <span id="blue-score">0.00</span>
+                </div>
+              </section>
+
+              <section class="timers" aria-label="Timers">
+                <div class="timer-wrapper">
+                  <span class="timer-label">Session:</span>
+                  <span id="session-time">20:00</span>
+                </div>
+                <div class="timer-wrapper">
+                  <span class="timer-label">Round:</span>
+                  <span id="round-time">1:00</span>
+                </div>
+                <div class="current-player-label" data-player="red">
+                  Current Player: <span id="current-player">Human</span>
+                </div>
+                <div class="timer-wrapper">
+                  <label for="ai-difficulty" class="timer-label"
+                    >Change AI:</label
+                  >
+                  <select id="ai-difficulty">
+                    <option value="2">Easy</option>
+                    <option value="3">Medium</option>
+                    <option value="4">Hard</option>
+                    <option value="6">Expert</option>
+                  </select>
+                </div>
+                <div class="ai-difficulty-label">
+                  AI Difficulty: <span id="ai-difficulty-display"></span>
+                </div>
+              </section>
+            </aside>
+
+            <!-- Gameboard -->
+            <div class="board-wrapper">
+              <section
+                id="gameboard"
+                tabindex="0"
+                aria-label="Gameboard"
+                aria-describedby="game-instructions"
+              ></section>
+            </div>
+
+            <!-- Move History & Actions -->
+            <aside
+              class="sidebar actions-sidebar"
+              aria-label="Move history and actions"
+            >
+              <section id="move-history">
+                <h2 class="move-history-header">Move History</h2>
+                <div class="move-history-scrollable">
+                  <ul id="move-history-content" aria-live="polite"></ul>
+                </div>
+              </section>
+
+              <div class="action-buttons">
+                <button id="surrender">Surrender</button>
+                <button id="agree-finish">Agree to Finish</button>
+                <button id="toggle-transparency">Show Symbols</button>
+                <button id="undo">Undo</button>
+                <button id="rotate-board-180">Rotate Board</button>
+                <button id="toggle-dark-mode">Dark Mode</button>
+                <button id="back-to-menu">← Back to Menu</button>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <div id="game-instructions" hidden>
+        Sci-Damath is a mathematical board game. You are playing against AI.
+      </div>
+    </main>
+
+    <!-- Sounds -->
+    <div id="sounds" aria-hidden="true">
+      <audio
+        id="move-sound"
+        src="../assets/sounds/move.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="capture-sound"
+        src="../assets/sounds/capture.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="move-promotion001"
+        src="../assets/sounds/promotion.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="game-end"
+        src="../assets/sounds/game-end.mp3"
+        preload="auto"
+      ></audio>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div
+      id="confirmation-modal"
+      class="modal"
+      hidden
+      role="dialog"
+      aria-labelledby="confirmation-title"
+    >
+      <div class="modal-content">
+        <h2 id="confirmation-title">Confirm Action</h2>
+        <div id="confirmation-message"></div>
+        <div class="modal-buttons">
+          <button id="confirm-yes" class="btn-primary">Yes</button>
+          <button id="confirm-no" class="btn-primary">No</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div
+      id="game-over-modal"
+      class="modal"
+      hidden
+      role="dialog"
+      aria-labelledby="game-over-title"
+    >
+      <div class="modal-content game-over-content">
+        <div id="game-over-message" class="game-over-message">
+          <h2 id="game-over-title">Game Over</h2>
+          <div id="game-over-message"></div>
+          <div class="modal-buttons">
+            <button id="new-game-btn" class="btn-primary">New Game</button>
+            <button id="close-modal" class="btn-primary">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="../assets/js/1-config.js"></script>
+    <script src="../assets/js/2-state.js"></script>
+    <script src="../assets/js/3-logic.js"></script>
+    <script src="../assets/js/4-debug.js"></script>
+    <script src="../assets/js/5-theme.js"></script>
+    <script src="../assets/js/6-dom.js"></script>
+    <script src="../assets/js/7-gameflow.js"></script>
+    <script src="../assets/js/8-history.js"></script>
+    <script src="../assets/js/9-input.js"></script>
+    <script src="../assets/js/10-timers.js"></script>
+    <script src="../assets/js/11-ui-controls.js"></script>
+    <script src="../assets/js/12-init.js"></script>
+  </body>
+</html>
+
+================================================================================
+
+================================================================================
+File: ./pvp/sci-damath/pvp-integer-scidamath.html
+--------------------------------------------------------------------------------
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Sci-Damath Offline - Player vs Player" />
+    <title>Sci-Damath Offline - Player vs Player</title>
+    <link rel="stylesheet" href="../../assets/css/styles.css" />
+    <link rel="icon" type="image/x-icon" href="../../assets/favicon.ico" />
+  </head>
+  <body>
+    <!-- Game Screen -->
+    <main id="game-screen" class="game-screen" tabindex="-1">
+      <div class="game-container">
+        <!-- CENTERED GAME CONTENT -->
+        <div class="centered-game-content">
+          <div class="game-layout">
+            <!-- Stats Sidebar (Score & Timers) -->
+            <aside class="sidebar stats-sidebar" aria-label="Game stats">
+              <section class="scoreboard" aria-label="Scoreboard">
+                <div class="score red">
+                  <h2>Red Score</h2>
+                  <span id="red-score">0.00</span>
+                </div>
+                <div class="score blue">
+                  <h2>Blue Score</h2>
+                  <span id="blue-score">0.00</span>
+                </div>
+              </section>
+
+              <section class="timers" aria-label="Timers">
+                <div class="timer-wrapper">
+                  <span class="timer-label">Session:</span>
+                  <span id="session-time">20:00</span>
+                </div>
+                <div class="timer-wrapper">
+                  <span class="timer-label">Round:</span>
+                  <span id="round-time">1:00</span>
+                </div>
+                <div class="current-player-label" data-player="red">
+                  Current Player: <span id="current-player">red</span>
+                </div>
+              </section>
+            </aside>
+
+            <!-- Gameboard -->
+            <div class="board-wrapper">
+              <section
+                id="gameboard"
+                tabindex="0"
+                aria-label="Gameboard"
+                aria-describedby="game-instructions"
+              ></section>
+            </div>
+
+            <!-- Move History & Actions -->
+            <aside
+              class="sidebar actions-sidebar"
+              aria-label="Move history and actions"
+            >
+              <section id="move-history">
+                <h2 class="move-history-header">Move History</h2>
+                <div class="move-history-scrollable">
+                  <ul id="move-history-content" aria-live="polite"></ul>
+                </div>
+              </section>
+
+              <div class="action-buttons">
+                <button id="surrender">Surrender</button>
+                <button id="agree-finish">Agree to Finish</button>
+                <button id="toggle-transparency">Show Symbols</button>
+                <button id="undo">Undo</button>
+                <button id="toggle-dark-mode">Dark Mode</button>
+                <button id="back-to-menu">← Back to Menu</button>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <div id="game-instructions" hidden>
+        Sci-Damath is a mathematical board game. You are playing against AI.
+      </div>
+    </main>
+
+    <!-- Sounds -->
+    <div id="sounds" aria-hidden="true">
+      <audio
+        id="move-sound"
+        src="../../assets/sounds/move.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="capture-sound"
+        src="../../assets/sounds/capture.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="move-promotion001"
+        src="../../assets/sounds/promotion.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="game-end"
+        src="../../assets/sounds/game-end.mp3"
+        preload="auto"
+      ></audio>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div
+      id="confirmation-modal"
+      class="modal"
+      hidden
+      role="dialog"
+      aria-labelledby="confirmation-title"
+    >
+      <div class="modal-content">
+        <h2 id="confirmation-title">Confirm Action</h2>
+        <div id="confirmation-message"></div>
+        <div class="modal-buttons">
+          <button id="confirm-yes" class="btn-primary">Yes</button>
+          <button id="confirm-no" class="btn-primary">No</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div
+      id="game-over-modal"
+      class="modal"
+      hidden
+      role="dialog"
+      aria-labelledby="game-over-title"
+    >
+      <div class="modal-content game-over-content">
+        <div id="game-over-message" class="game-over-message">
+          <h2 id="game-over-title">Game Over</h2>
+          <div id="game-over-message"></div>
+          <div class="modal-buttons">
+            <button id="new-game-btn" class="btn-primary">New Game</button>
+            <button id="close-modal" class="btn-primary">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="../../assets/js/1-config.js"></script>
+    <script src="../../assets/js/2-state.js"></script>
+    <script src="../../assets/js/3-logic.js"></script>
+    <script src="../../assets/js/5-theme.js"></script>
+    <script src="../../assets/js/6-dom.js"></script>
+    <script src="../../assets/js/7-gameflow.js"></script>
+    <script src="../../assets/js/8-history.js"></script>
+    <script src="../../assets/js/9-input.js"></script>
+    <script src="../../assets/js/10-timers.js"></script>
+    <script src="../../assets/js/11-ui-controls.js"></script>
+    <script src="../../assets/js/12-init.js"></script>
+  </body>
+</html>
+
+================================================================================
+

@@ -206,6 +206,9 @@ function updateTurnHistoryDOM() {
     // 👇 Now you can safely use (index + 1)
     const moveNumber = index + 1;
 
+    const dispStartRow = 7 - entry.startRow;
+    const dispEndRow = 7 - entry.endRow;
+
     if (entry.type === "capture") {
       const isCapturingKing = entry.isCapturingKing;
       const isCapturedKing = entry.isCapturedKing;
@@ -224,21 +227,19 @@ function updateTurnHistoryDOM() {
 
       const op = `<span class="operator">${entry.operator}</span>`;
 
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: [(${
-        entry.startRow
-      },${entry.startCol}) [${val1Display}] ${op} (${entry.endRow},${
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: [(${dispStartRow},${
+        entry.startCol
+      }) [${val1Display}] ${op} (${dispEndRow},${
         entry.endCol
       }) [${val2Display}]] × ${multiplier} = ${baseScore} × ${multiplier} = <span class="result ${
         entry.result >= 0 ? "positive" : "negative"
       }">${finalScore}</span>`;
     } else if (entry.type === "move") {
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: ${
-        entry.piece
-      }(${entry.value}) moved to (${entry.endRow},${entry.endCol})`;
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: (${entry.value}) moved from (${dispStartRow},${
+        entry.startCol
+      }) to (${dispEndRow},${entry.endCol})`;
     } else if (entry.type === "promotion") {
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: ${
-        entry.piece
-      } promoted to DAMA!`;
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: promoted to DAMA!`;
     } else if (entry.type === "final-tally") {
       moveText = `<strong>${entry.player.toUpperCase()}</strong>: Final tally of remaining pieces = <span class="result ${
         entry.value >= 0 ? "positive" : "negative"
@@ -251,7 +252,7 @@ function updateTurnHistoryDOM() {
     moveItem.innerHTML = moveText;
     historyList.appendChild(moveItem);
   });
-  
+
   const scrollableContainer = document.querySelector(
     ".move-history-scrollable"
   );
@@ -445,37 +446,126 @@ function endGame(reason, isSurrender = false) {
   if (sessionInterval) clearInterval(sessionInterval);
   if (roundInterval) clearInterval(roundInterval);
   playSound("gameEnd");
+
   const modal = document.getElementById("game-over-modal");
   const messageEl = document.getElementById("game-over-message");
   const newGameBtn = document.getElementById("new-game-btn");
   const closeBtn = document.getElementById("close-modal");
+
   let finalMessage = reason.replace(/\n/g, "<br>");
+
   if (!isSurrender) {
-    finalScores = calculateFinalScores();
-    finalRed = finalScores.red.toFixed(2);
-    finalBlue = finalScores.blue.toFixed(2);
-    let winnerMessage = "";
-    if (finalRed < finalBlue) winnerMessage = "Red wins!";
-    else if (finalBlue < finalRed) winnerMessage = "Blue wins!";
-    else winnerMessage = "It's a draw!";
-    finalMessage += `<br><br>Final Scores:<br>Red: ${finalRed}<br>Blue: ${finalBlue}<br><br>${winnerMessage}`;
+    // Gather remaining pieces
+    const redPieces = Array.from(document.querySelectorAll(".piece.red"));
+    const bluePieces = Array.from(document.querySelectorAll(".piece.blue"));
+
+    let redRemaining = 0;
+    let blueRemaining = 0;
+    const redDetails = [];
+    const blueDetails = [];
+
+    redPieces.forEach((piece) => {
+      const val = parseFloat(piece.dataset.value);
+      const isKing = piece.classList.contains("king");
+      const multiplier = isKing ? 2 : 1;
+      const contribution = val * multiplier;
+      redRemaining += contribution;
+      redDetails.push(
+        `${val}${isKing ? "*" : ""} (${
+          isKing ? "DAMA" : "chip"
+        }) → ${contribution.toFixed(0)}`
+      );
+    });
+
+    bluePieces.forEach((piece) => {
+      const val = parseFloat(piece.dataset.value);
+      const isKing = piece.classList.contains("king");
+      const multiplier = isKing ? 2 : 1;
+      const contribution = val * multiplier;
+      blueRemaining += contribution;
+      blueDetails.push(
+        `${val}${isKing ? "*" : ""} (${
+          isKing ? "DAMA" : "chip"
+        }) → ${contribution.toFixed(0)}`
+      );
+    });
+
+    // Add to running scores
+    const finalRed = (redScore + redRemaining).toFixed(2);
+    const finalBlue = (blueScore + blueRemaining).toFixed(2);
+
+    // Build two-column breakdown
+    const redList = redDetails.length
+      ? `<ul><li>${redDetails.join("</li><li>")}</li></ul>`
+      : "<em>none</em>";
+    const blueList = blueDetails.length
+      ? `<ul><li>${blueDetails.join("</li><li>")}</li></ul>`
+      : "<em>none</em>";
+
+    let breakdown = `<br><strong>Final Piece Tally:</strong>`;
+    breakdown += `
+      <div class="piece-breakdown">
+        <div class="column">
+          <h4>Red Remaining</h4>
+          ${redList}
+          <p><strong>Total added:</strong> ${redRemaining.toFixed(2)}</p>
+        </div>
+        <div class="column">
+          <h4>Blue Remaining</h4>
+          ${blueList}
+          <p><strong>Total added:</strong> ${blueRemaining.toFixed(2)}</p>
+        </div>
+      </div>
+    `;
+
+    // Final scores and winner
+    breakdown += `
+      <div class="final-scores">
+        <p><strong>Final Scores:</strong><br>
+        Red: ${redScore.toFixed(2)} + ${redRemaining.toFixed(
+      2
+    )} = <strong>${finalRed}</strong><br>
+        Blue: ${blueScore.toFixed(2)} + ${blueRemaining.toFixed(
+      2
+    )} = <strong>${finalBlue}</strong>
+        </p>
+    `;
+    if (parseFloat(finalRed) < parseFloat(finalBlue)) {
+      breakdown +=
+        "<p><strong>Red wins!</strong><br> (Lower score wins in Sci-Damath)</p>";
+    } else if (parseFloat(finalBlue) < parseFloat(finalRed)) {
+      breakdown +=
+        "<p><strong>Blue wins!</strong><br> (Lower score wins in Sci-Damath)</p>";
+    } else {
+      breakdown += "<p><strong>It's a draw!</strong></p>";
+    }
+    breakdown += "</div>";
+
+    finalMessage += breakdown;
   }
+
   messageEl.innerHTML = finalMessage;
   modal.hidden = false;
+
   const closeModal = () => (modal.hidden = true);
   const startNewGame = () => {
     closeModal();
     resetGame();
   };
+
   newGameBtn.onclick = startNewGame;
   closeBtn.onclick = closeModal;
+
   if (
     isSurrender ||
     reason.includes("manually") ||
     reason.includes("agreement")
-  )
+  ) {
     closeBtn.focus();
-  else newGameBtn.focus();
+  } else {
+    newGameBtn.focus();
+  }
+
   const handleEscape = (e) => {
     if (e.key === "Escape") {
       closeModal();
@@ -485,7 +575,7 @@ function endGame(reason, isSurrender = false) {
   document.addEventListener("keydown", handleEscape);
 }
 
-function logMove(moveData) {
+function logMove() {
   if (replayMode) return null;
   return nextMoveId++; // just return ID; no DOM logging
 }
@@ -743,6 +833,63 @@ function switchTurn() {
   }
 }
 
+function appendMoveToHistoryDOM(entry) {
+  const historyList = document.getElementById("move-history-content");
+  if (!historyList) return;
+
+  const moveItem = document.createElement("li");
+  moveItem.className = `move-item ${entry.player}`;
+
+  // Get the next move number (based on current children count + 1)
+  const moveNumber = historyList.children.length + 1;
+
+  let moveText = "";
+  if (entry.type === "capture") {
+    const isCapturingKing = entry.isCapturingKing;
+    const isCapturedKing = entry.isCapturedKing;
+    let multiplier = 1;
+    if (isCapturingKing && isCapturedKing) multiplier = 4;
+    else if (isCapturingKing || isCapturedKing) multiplier = 2;
+    const val1Display = isCapturingKing
+      ? `${entry.capturingValue}*`
+      : entry.capturingValue;
+    const val2Display = isCapturedKing
+      ? `${entry.capturedValue}*`
+      : entry.capturedValue;
+    const baseScore = (entry.result / multiplier).toFixed(2);
+    const finalScore = entry.result.toFixed(2);
+    const op = `<span class="operator">${entry.operator}</span>`;
+
+    // 👇 FLIP ROWS for Sci-Damath display
+    const dispStartRow = 7 - entry.startRow;
+    const dispEndRow = 7 - entry.endRow;
+
+    moveText = `<strong>${entry.player.toUpperCase()}</strong>: [(${dispStartRow},${
+      entry.startCol
+    }) [${val1Display}] ${op} (${dispEndRow},${
+      entry.endCol
+    }) [${val2Display}]] × ${multiplier} = ${baseScore} × ${multiplier} = <span class="result ${
+      entry.result >= 0 ? "positive" : "negative"
+    }">${finalScore}</span>`;
+  } else if (entry.type === "move") {
+    const dispStartRow = 7 - entry.startRow;
+    const dispEndRow = 7 - entry.endCol;
+    moveText = `<strong>${entry.player.toUpperCase()}</strong>: (${entry.value}) moved from (${dispStartRow},${
+      entry.startCol
+    }) to (${dispEndRow},${entry.endCol})`;
+  } else if (entry.type === "promotion") {
+    moveText = `<strong>${entry.player.toUpperCase()}</strong>: promoted to DAMA!`;
+  }
+
+  moveText = `(${moveNumber}) ${moveText}`;
+  moveItem.innerHTML = moveText;
+  historyList.appendChild(moveItem);
+
+  // Scroll to bottom
+  const container = document.querySelector(".move-history-scrollable");
+  if (container) container.scrollTop = container.scrollHeight;
+}
+
 function performMove(piece, startRow, startCol, endRow, endCol) {
   if (gameOver || replayMode) return;
   const color = piece.classList.contains("red") ? "red" : "blue";
@@ -812,20 +959,24 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       endRow,
       endCol,
     };
-    currentTurnMoveIds.push(moveData);
-    capturedPieces.forEach((p) => p.remove());
     playSound("capture");
+    currentTurnMoveIds.push(moveData);
+    appendMoveToHistoryDOM(moveData);
+    capturedPieces.forEach((p) => p.remove());
   } else {
     const moveData = {
       type: "move",
       player: color,
       piece: pieceKey,
       value: pieceValue,
+      startRow,
+      startCol,
       endRow,
       endCol,
     };
-    currentTurnMoveIds.push(moveData);
     playSound("move");
+    currentTurnMoveIds.push(moveData);
+    appendMoveToHistoryDOM(moveData);
   }
 
   const endSq = document.querySelector(
@@ -838,7 +989,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
 
   const wasPromoted =
     (!isKing && color === "red" && endRow === 0) ||
-    (color === "blue" && endRow === 7);
+    (!isKing && color === "blue" && endRow === 7);
 
   if (wasPromoted) {
     // Promote by updating key and class
@@ -854,8 +1005,9 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       player: color,
       piece: pieceKey,
     };
-    currentTurnMoveIds.push(moveData);
     playSound("promotion");
+    currentTurnMoveIds.push(moveData);
+    appendMoveToHistoryDOM(moveData);
     mustCaptureWithPiece = null;
     switchTurn();
     turnEnded = true;
@@ -1123,3 +1275,4 @@ function getBestCaptureMove(board, color) {
   }
   return bestMove;
 }
+
