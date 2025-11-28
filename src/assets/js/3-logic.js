@@ -68,6 +68,11 @@ function getImmediateCaptures(board, r, c, piece) {
       let landR = enemyR + dr;
       let landC = enemyC + dc;
       while (landR >= 0 && landR < 8 && landC >= 0 && landC < 8) {
+        if ((landR + landC) % 2 !== 0) {
+          landR += dr;
+          landC += dc;
+          continue; // skip dark squares
+        }
         if (board[landR][landC]) break;
         captures.push({
           startRow: r,
@@ -85,6 +90,8 @@ function getImmediateCaptures(board, r, c, piece) {
       const midC = c + dc;
       const landR = midR + dr;
       const landC = midC + dc;
+      // ✅ Ensure landing square is playable (light)
+      if ((landR + landC) % 2 !== 0) continue;
       if (
         midR < 0 ||
         midR >= 8 ||
@@ -187,8 +194,6 @@ function updateTurnHistoryDOM() {
   const historyList = document.getElementById("move-history-content");
   if (!historyList) return;
   historyList.innerHTML = "";
-
-  // Flatten all moves from all turns (skip turn 0 = initial state)
   const allMoves = [];
   for (let i = 1; i < turnHistory.length; i++) {
     const turn = turnHistory[i];
@@ -197,59 +202,53 @@ function updateTurnHistoryDOM() {
     }
   }
 
-  // Render each move
-  allMoves.forEach((entry, index) => {
+  let moveCounter = 0;
+  allMoves.forEach((entry) => {
     const moveItem = document.createElement("li");
     moveItem.className = `move-item ${entry.player}`;
     let moveText = "";
 
-    // 👇 Now you can safely use (index + 1)
-    const moveNumber = index + 1;
-
-    const dispStartRow = 7 - entry.startRow;
-    const dispEndRow = 7 - entry.endRow;
-
-    if (entry.type === "capture") {
-      const isCapturingKing = entry.isCapturingKing;
-      const isCapturedKing = entry.isCapturedKing;
-      let multiplier = 1;
-      if (isCapturingKing && isCapturedKing) multiplier = 4;
-      else if (isCapturingKing || isCapturedKing) multiplier = 2;
-
-      const val1Display = isCapturingKing
-        ? `${entry.capturingValue}*`
-        : entry.capturingValue;
-      const val2Display = isCapturedKing
-        ? `${entry.capturedValue}*`
-        : entry.capturedValue;
-      const baseScore = (entry.result / multiplier).toFixed(2);
-      const finalScore = entry.result.toFixed(2);
-
-      const op = `<span class="operator">${entry.operator}</span>`;
-
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: [(${dispStartRow},${
-        entry.startCol
-      }) [${val1Display}] ${op} (${dispEndRow},${
-        entry.endCol
-      }) [${val2Display}]] × ${multiplier} = ${baseScore} × ${multiplier} = <span class="result ${
-        entry.result >= 0 ? "positive" : "negative"
-      }">${finalScore}</span>`;
-    } else if (entry.type === "move") {
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: (${
-        entry.value
-      }) moved from (${dispStartRow},${entry.startCol}) to (${dispEndRow},${
-        entry.endCol
-      })`;
-    } else if (entry.type === "promotion") {
+    if (entry.type === "promotion") {
       moveText = `<strong>${entry.player.toUpperCase()}</strong>: promoted to DAMA!`;
-    } else if (entry.type === "final-tally") {
-      moveText = `<strong>${entry.player.toUpperCase()}</strong>: Final tally of remaining pieces = <span class="result ${
-        entry.value >= 0 ? "positive" : "negative"
-      }">${entry.value.toFixed(2)} (×2 for each DAMA)</span>`;
+    } else {
+      moveCounter++;
+      const dispStartRow = 7 - entry.startRow;
+      const dispEndRow = 7 - entry.endRow;
+      if (entry.type === "capture") {
+        const isCapturingKing = entry.isCapturingKing;
+        const isCapturedKing = entry.isCapturedKing;
+        let multiplier = 1;
+        if (isCapturingKing && isCapturedKing) multiplier = 4;
+        else if (isCapturingKing || isCapturedKing) multiplier = 2;
+        const val1Display = isCapturingKing
+          ? `${entry.capturingValue}*`
+          : entry.capturingValue;
+        const val2Display = isCapturedKing
+          ? `${entry.capturedValue}*`
+          : entry.capturedValue;
+        const baseScore = (entry.result / multiplier).toFixed(2);
+        const finalScore = entry.result.toFixed(2);
+        const op = `<span class="operator">${entry.operator}</span>`;
+        moveText = `<strong>${entry.player.toUpperCase()}</strong>: [(${dispStartRow},${
+          entry.startCol
+        }) [${val1Display}] ${op} (${dispEndRow},${
+          entry.endCol
+        }) [${val2Display}]] × ${multiplier} = ${baseScore} × ${multiplier} = <span class="result ${
+          entry.result >= 0 ? "positive" : "negative"
+        }">${finalScore}</span>`;
+      } else if (entry.type === "move") {
+        moveText = `<strong>${entry.player.toUpperCase()}</strong>: (${
+          entry.value
+        }) moved from (${dispStartRow},${entry.startCol}) to (${dispEndRow},${
+          entry.endCol
+        })`;
+      } else if (entry.type === "final-tally") {
+        moveText = `<strong>${entry.player.toUpperCase()}</strong>: Final tally of remaining pieces = <span class="result ${
+          entry.value >= 0 ? "positive" : "negative"
+        }">${entry.value.toFixed(2)} (×2 for each DAMA)</span>`;
+      }
+      moveText = `(${moveCounter}) ${moveText}`;
     }
-
-    // ✅ Prepend move number like "(1)", "(2)", etc.
-    moveText = `(${moveNumber}) ${moveText}`;
 
     moveItem.innerHTML = moveText;
     historyList.appendChild(moveItem);
@@ -264,44 +263,81 @@ function updateTurnHistoryDOM() {
 }
 
 function placeInitialPieces() {
+  // Ensure board DOM exists
+  if (!gameboard || gameboard.children.length === 0) {
+    initializeBoard();
+  }
+
+  // Clear existing pieces
   document.querySelectorAll(".piece").forEach((p) => p.remove());
-  const setup = debugMode ? DEBUG_SETUP : INITIAL_SETUP;
+
+  let setup = debugMode ? DEBUG_SETUP : INITIAL_SETUP;
+
+  // Swap setup if human is blue (PVAI mode)
+  if (gameMode === "pvai" && window.humanColor === "blue") {
+    const swappedSetup = {};
+    for (const [pos, pieceKey] of Object.entries(setup)) {
+      const [r, c] = pos.split(",").map(Number);
+      // ✅ FLIP BOTH ROW AND COLUMN to preserve light-square parity
+      const newPos = `${7 - r},${7 - c}`;
+      let newKey = pieceKey;
+      if (pieceKey.startsWith("r")) {
+        newKey = "b" + pieceKey.slice(1);
+      } else if (pieceKey.startsWith("b")) {
+        newKey = "r" + pieceKey.slice(1);
+      }
+      if (!PIECES[newKey]) {
+        console.error("Invalid swapped piece key:", newKey, "from", pieceKey);
+        continue;
+      }
+      swappedSetup[newPos] = newKey;
+    }
+    setup = swappedSetup;
+  }
+
+  // Place pieces with validation
+  let pieceCount = 0;
   for (const pos in setup) {
     const [row, col] = pos.split(",").map(Number);
     const pieceKey = setup[pos];
     const pieceData = PIECES[pieceKey];
-
-    if (!pieceData) continue;
+    if (!pieceData) {
+      console.warn("Skipping unknown pieceKey:", pieceKey);
+      continue;
+    }
     const square = document.querySelector(
       `.square[data-row='${row}'][data-col='${col}']`
     );
-    if (!square || !square.classList.contains("playable")) continue;
+    if (!square || !square.classList.contains("playable")) {
+      console.warn("Invalid square for piece placement:", pos);
+      continue;
+    }
+
     const piece = document.createElement("div");
-    piece.dataset.pieceKey = pieceKey; // ✅ NEW
-    piece.classList.add("piece", pieceData.color, pieceKey);
+    piece.dataset.pieceKey = pieceKey;
+    piece.classList.add("piece", pieceData.color);
     if (pieceData.isKing) piece.classList.add("king");
-    piece.setAttribute("tabindex", "0");
     piece.draggable = true;
+    piece.tabIndex = 0;
     piece.dataset.value = pieceData.value;
+
     const label = document.createElement("span");
     label.classList.add("piece-number");
     label.textContent = pieceData.value;
     piece.appendChild(label);
+
     square.appendChild(piece);
+    pieceCount++;
   }
+
+  if (pieceCount === 0) {
+    console.error("⚠️ No pieces were placed on the board!");
+    showErrorMessage("Board setup failed. Please refresh.");
+  }
+
   const initialState = saveBoardState();
-  // ✅ Add initial state as turn 0
-  turnHistory = [
-    {
-      player: null,
-      endState: initialState,
-      moves: [],
-    },
-  ];
-  currentTurnIndex = 0; // now 0 = initial state
-  currentTurnStartState = null;
-  isTurnActive = false;
-  currentHistoryIndex = -1;
+  turnHistory = [{ player: null, endState: initialState, moves: [] }];
+  currentTurnIndex = 0;
   updateTurnHistoryDOM();
 }
 
@@ -403,6 +439,7 @@ function resetGame() {
   blueScore = 0.0;
   redScoreEl.textContent = "0.00";
   blueScoreEl.textContent = "0.00";
+  currentTurnHasCaptured = false;
 
   // ✅ ALWAYS start with red
   currentPlayer = "red";
@@ -424,6 +461,7 @@ function resetGame() {
   if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   }
+
   mustCaptureWithPiece = null;
   selectedPiece = null;
   nextMoveId = 0;
@@ -452,12 +490,22 @@ function resetGame() {
   if (errorMessageEl) errorMessageEl.hidden = true;
   placeInitialPieces();
 
+  // After placeInitialPieces()
+  const boardWrapper = document.querySelector(".board-wrapper");
+  if (boardWrapper) {
+    if (gameMode === "pvai" && window.humanColor === "blue") {
+      boardWrapper.classList.add("rotated");
+    } else {
+      boardWrapper.classList.remove("rotated");
+    }
+  }
+
   if (gameMode === "pvai" && window.aiColor === "red") {
     setTimeout(() => {
       if (!gameOver && currentPlayer === "red") {
         makeAIMove();
       }
-    }, 750);
+    }, 1500);
   }
 }
 
@@ -531,7 +579,7 @@ function endGame(reason, isSurrender = false) {
       ? `<ul><li>${blueDetails.join("</li><li>")}</li></ul>`
       : "<em>none</em>";
 
-    let breakdown = `<br><strong>Final Piece Tally:</strong>`;
+    let breakdown = `<br><br><strong>Final Piece Tally:</strong>`;
     breakdown += `
       <div class="piece-breakdown">
         <div class="column">
@@ -784,7 +832,6 @@ function getMaxCaptureCount(
   visited = new Set(),
   depth = 0
 ) {
-  if (depth >= 3 || !piece) return 0;
   const key = `${r},${c}`;
   if (visited.has(key)) return 0;
   visited.add(key);
@@ -811,22 +858,23 @@ function getMaxCaptureCount(
 /**
  * Returns only the capture moves with the highest total capture potential.
  * Enforces Mayor Dama rules:
- *   - Maximize number of captures.
- *   - If tied, prefer moves starting with a DAMA (king).
+ *   - Maximize number of pieces captured in a single turn.
+ *   - If tied in number of captures, prefer moves that START with a DAMA (king).
  */
 function getAllBestCaptureMoves(board, color) {
   const allCaptureMoves = generateAllCaptureMoves(board, color);
   if (allCaptureMoves.length === 0) return [];
 
-  // Evaluate each move's full capture potential
+  // Evaluate each move's full capture chain potential
   const moveScores = allCaptureMoves.map((move) => {
     const startingPiece = board[move.startRow][move.startCol];
     const newBoard = applyLogicalMove(board, move);
     const landed = newBoard[move.endRow][move.endCol];
 
-    // 🔴 CRITICAL: Use ORIGINAL piece's king status
+    // ✅ CRITICAL FIX: Use the STARTING piece's king status, not the landed piece's
     const startedAsKing = startingPiece?.isKing || false;
 
+    // Simulate further captures from the new position
     const further = getMaxCaptureCount(
       newBoard,
       move.endRow,
@@ -834,26 +882,50 @@ function getAllBestCaptureMoves(board, color) {
       landed,
       new Set([`${move.startRow},${move.startCol}`])
     );
-    const totalCaptures = move.captured.length + further;
 
-    return {
-      move,
-      totalCaptures,
-      startedAsKing, // ✅ Not landed.isKing!
-    };
+    const totalCaptures = move.captured.length + further;
+    return { move, totalCaptures, startedAsKing };
   });
 
-  // Find max capture count
+  // Find the maximum number of captures achievable
   const maxCaptures = Math.max(...moveScores.map((s) => s.totalCaptures));
 
-  // Filter to best capture count
+  // Filter to only moves that achieve the maximum capture count
   let bestMoves = moveScores.filter((s) => s.totalCaptures === maxCaptures);
 
-  // 👑 Mayor Dama Rule #3: If tie in captures, prefer DAMA (king) as starting piece
+  // 👑 Mayor Dama Rule: If any best move starts with a DAMA, discard non-dama moves
   const hasDamaStarter = bestMoves.some((s) => s.startedAsKing);
   if (hasDamaStarter) {
     bestMoves = bestMoves.filter((s) => s.startedAsKing);
   }
+
+  // Among bestMoves (same capture count), sort by estimated capture score
+  bestMoves.sort((a, b) => {
+    const pieceA = board[a.move.startRow][a.move.startCol];
+    const capturedA = board[a.move.captured[0][0]][a.move.captured[0][1]];
+    const opA = DAMATH_LAYOUT[a.move.endRow][a.move.endCol];
+    const scoreA = calculateCaptureScoreSimulated(
+      pieceA.value,
+      capturedA.value,
+      pieceA.isKing,
+      capturedA.isKing,
+      opA
+    );
+
+    const pieceB = board[b.move.startRow][b.move.startCol];
+    const capturedB = board[b.move.captured[0][0]][b.move.captured[0][1]];
+    const opB = DAMATH_LAYOUT[b.move.endRow][b.move.endCol];
+    const scoreB = calculateCaptureScoreSimulated(
+      pieceB.value,
+      capturedB.value,
+      pieceB.isKing,
+      capturedB.isKing,
+      opB
+    );
+
+    // AI wants MINIMAL score → lower score is better
+    return scoreA - scoreB;
+  });
 
   return bestMoves.map((s) => s.move);
 }
@@ -987,34 +1059,59 @@ function minimizeAIScore(
   }
 }
 
+function switchTurn() {
+  currentTurnHasCaptured = false;
+  mustCaptureWithPiece = null;
+  currentPlayer = currentPlayer === "red" ? "blue" : "red";
+  currentPlayerEl.textContent = currentPlayer;
+  const currentPlayerLabel = document.querySelector(".current-turn-label");
+  if (currentPlayerLabel) {
+    currentPlayerLabel.setAttribute("data-player", currentPlayer);
+  }
+  if (roundInterval) clearInterval(roundInterval);
+  roundMinutes = 1;
+  roundSeconds = 0;
+  roundEl.className = "timer";
+  roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
+  startRoundTimer();
+
+  // ✅ Record full turn data including moves
+  const lastPlayer = currentPlayer === "blue" ? "red" : "blue";
+  const currentState = saveBoardState();
+  const turnEntry = {
+    player: lastPlayer,
+    endState: currentState,
+    moves: [...currentTurnMoveIds], // 👈 CRITICAL: persist the moves
+  };
+
+  turnHistory = turnHistory.slice(0, currentTurnIndex + 1);
+  turnHistory.push(turnEntry);
+  currentTurnIndex++;
+
+  // ✅ Clear for next turn
+  currentTurnMoveIds = [];
+
+  // ✅ Update history display
+  updateTurnHistoryDOM(); // ←←← ADD THIS
+
+  let displayPlayer = currentPlayer;
+  if (gameMode === "pvai") {
+    displayPlayer = currentPlayer === window.humanColor ? "Human" : "AI";
+  }
+  currentPlayerEl.textContent = displayPlayer;
+
+  if (gameMode === "pvai" && currentPlayer === window.aiColor) {
+    setTimeout(() => makeAIMove(), 1500);
+  }
+}
+
 function makeAIMove() {
-  if (gameOver || currentPlayer !== window.aiColor || replayMode) return;
+  if (gameOver || currentPlayer !== window.aiColor || replayMode) {
+    return;
+  }
   const board = createLogicalBoard();
   const color = window.aiColor;
   const aiDepth = window.aiDepth || 2;
-
-  // Handle forced capture continuation
-  if (mustCaptureWithPiece) {
-    const sq = mustCaptureWithPiece.parentElement;
-    const startRow = parseInt(sq.dataset.row, 10);
-    const startCol = parseInt(sq.dataset.col, 10);
-    const piece = board[startRow][startCol];
-    if (piece && piece.color === color) {
-      const captureMoves = getImmediateCaptures(
-        board,
-        startRow,
-        startCol,
-        piece
-      );
-      if (captureMoves.length > 0) {
-        const bestContinuation = getAllBestCaptureMoves(board, color).find(
-          (m) => m.startRow === startRow && m.startCol === startCol
-        );
-        executeLogicalMove(bestContinuation || captureMoves[0]);
-        return;
-      }
-    }
-  }
 
   // Get legal moves (enforce Mayor Dama)
   const moves = getLegalMoves(board, color);
@@ -1073,51 +1170,6 @@ function makeAIMove() {
   executeLogicalMove(finalMove);
 }
 
-function switchTurn() {
-  mustCaptureWithPiece = null;
-  currentPlayer = currentPlayer === "red" ? "blue" : "red";
-  currentPlayerEl.textContent = currentPlayer;
-  const currentPlayerLabel = document.querySelector(".current-turn-label");
-  if (currentPlayerLabel) {
-    currentPlayerLabel.setAttribute("data-player", currentPlayer);
-  }
-  if (roundInterval) clearInterval(roundInterval);
-  roundMinutes = 1;
-  roundSeconds = 0;
-  roundEl.className = "timer";
-  roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
-  startRoundTimer();
-
-  // ✅ Record full turn data including moves
-  const lastPlayer = currentPlayer === "blue" ? "red" : "blue";
-  const currentState = saveBoardState();
-  const turnEntry = {
-    player: lastPlayer,
-    endState: currentState,
-    moves: [...currentTurnMoveIds], // 👈 CRITICAL: persist the moves
-  };
-
-  turnHistory = turnHistory.slice(0, currentTurnIndex + 1);
-  turnHistory.push(turnEntry);
-  currentTurnIndex++;
-
-  // ✅ Clear for next turn
-  currentTurnMoveIds = [];
-
-  // ✅ Update history display
-  updateTurnHistoryDOM(); // ←←← ADD THIS
-
-  let displayPlayer = currentPlayer;
-  if (gameMode === "pvai") {
-    displayPlayer = currentPlayer === window.humanColor ? "Human" : "AI";
-  }
-  currentPlayerEl.textContent = displayPlayer;
-
-  if (gameMode === "pvai" && currentPlayer === window.aiColor) {
-    setTimeout(() => makeAIMove(), 750);
-  }
-}
-
 function appendMoveToHistoryDOM(entry) {
   const historyList = document.getElementById("move-history-content");
   if (!historyList) return;
@@ -1125,54 +1177,57 @@ function appendMoveToHistoryDOM(entry) {
   const moveItem = document.createElement("li");
   moveItem.className = `move-item ${entry.player}`;
 
-  // Get the next move number (based on current children count + 1)
-  const moveNumber = historyList.children.length + 1;
-
   let moveText = "";
-  if (entry.type === "capture") {
-    const isCapturingKing = entry.isCapturingKing;
-    const isCapturedKing = entry.isCapturedKing;
-    let multiplier = 1;
-    if (isCapturingKing && isCapturedKing) multiplier = 4;
-    else if (isCapturingKing || isCapturedKing) multiplier = 2;
-    const val1Display = isCapturingKing
-      ? `${entry.capturingValue}*`
-      : entry.capturingValue;
-    const val2Display = isCapturedKing
-      ? `${entry.capturedValue}*`
-      : entry.capturedValue;
-    const baseScore = (entry.result / multiplier).toFixed(2);
-    const finalScore = entry.result.toFixed(2);
-    const op = `<span class="operator">${entry.operator}</span>`;
 
-    // 👇 FLIP ROWS for Sci-Damath display
+  if (entry.type === "promotion") {
+    // Not a move — do NOT increment counter
+    moveText = `<strong>${entry.player.toUpperCase()}</strong>: promoted to DAMA!`;
+    // Optional: mark for clarity
+    moveItem.setAttribute("data-type", "annotation");
+  } else {
+    // Real move — increment counter
+    actualMoveCount++;
+    const moveNumber = actualMoveCount;
+
     const dispStartRow = 7 - entry.startRow;
     const dispEndRow = 7 - entry.endRow;
 
-    moveText = `<strong>${entry.player.toUpperCase()}</strong>: [(${dispStartRow},${
-      entry.startCol
-    }) [${val1Display}] ${op} (${dispEndRow},${
-      entry.endCol
-    }) [${val2Display}]] × ${multiplier} = ${baseScore} × ${multiplier} = <span class="result ${
-      entry.result >= 0 ? "positive" : "negative"
-    }">${finalScore}</span>`;
-  } else if (entry.type === "move") {
-    const dispStartRow = 7 - entry.startRow;
-    const dispEndRow = 7 - entry.endCol;
-    moveText = `<strong>${entry.player.toUpperCase()}</strong>: (${
-      entry.value
-    }) moved from (${dispStartRow},${entry.startCol}) to (${dispEndRow},${
-      entry.endCol
-    })`;
-  } else if (entry.type === "promotion") {
-    moveText = `<strong>${entry.player.toUpperCase()}</strong>: promoted to DAMA!`;
+    if (entry.type === "capture") {
+      const isCapturingKing = entry.isCapturingKing;
+      const isCapturedKing = entry.isCapturedKing;
+      let multiplier = 1;
+      if (isCapturingKing && isCapturedKing) multiplier = 4;
+      else if (isCapturingKing || isCapturedKing) multiplier = 2;
+      const val1Display = isCapturingKing
+        ? `${entry.capturingValue}*`
+        : entry.capturingValue;
+      const val2Display = isCapturedKing
+        ? `${entry.capturedValue}*`
+        : entry.capturedValue;
+      const baseScore = (entry.result / multiplier).toFixed(2);
+      const finalScore = entry.result.toFixed(2);
+      const op = `<span class="operator">${entry.operator}</span>`;
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: [(${dispStartRow},${
+        entry.startCol
+      }) [${val1Display}] ${op} (${dispEndRow},${
+        entry.endCol
+      }) [${val2Display}]] × ${multiplier} = ${baseScore} × ${multiplier} = <span class="result ${
+        entry.result >= 0 ? "positive" : "negative"
+      }">${finalScore}</span>`;
+    } else if (entry.type === "move") {
+      moveText = `<strong>${entry.player.toUpperCase()}</strong>: (${
+        entry.value
+      }) moved from (${dispStartRow},${entry.startCol}) to (${dispEndRow},${
+        entry.endCol
+      })`;
+    }
+    moveText = `(${moveNumber}) ${moveText}`;
+    moveItem.setAttribute("data-type", "move"); // 👈 or omit, but promotion has annotation
   }
 
-  moveText = `(${moveNumber}) ${moveText}`;
   moveItem.innerHTML = moveText;
   historyList.appendChild(moveItem);
 
-  // Scroll to bottom
   const container = document.querySelector(".move-history-scrollable");
   if (container) container.scrollTop = container.scrollHeight;
 }
@@ -1182,18 +1237,36 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   const color = piece.classList.contains("red") ? "red" : "blue";
   const pieceKey =
     Array.from(piece.classList).find((cls) => cls.match(/^[rb]\d+(_king)?$/)) ||
-    piece.dataset.pieceKey || // fallback to dataset
+    piece.dataset.pieceKey ||
     "piece";
   const pieceValue = parseFloat(piece.dataset.value);
   const isKing = piece.classList.contains("king");
   const board = createLogicalBoard();
 
-  // ===== Mayor Dama Enforcement =====
-  const allMoves = generateAllMoves(board, color);
-  const captureMoves = allMoves.filter((m) => m.isCapture);
-  let allowedMoves = allMoves;
-  if (captureMoves.length > 0) {
-    allowedMoves = getAllBestCaptureMoves(board, color);
+  // ===== MOVE VALIDATION (with forced capture handling) =====
+  let allowedMoves = [];
+  if (mustCaptureWithPiece) {
+    // 🔒 Mid-chain: ONLY allow further captures from this piece
+    const currentPiece = board[startRow][startCol];
+    if (!currentPiece || currentPiece.color !== color) {
+      showErrorMessage("Invalid piece for continuation.");
+      return;
+    }
+    allowedMoves = getImmediateCaptures(
+      board,
+      startRow,
+      startCol,
+      currentPiece
+    );
+  } else {
+    // 🌍 Start of turn: full Mayor Dama enforcement
+    const allMoves = generateAllMoves(board, color);
+    const captureMoves = allMoves.filter((m) => m.isCapture);
+    if (captureMoves.length > 0) {
+      allowedMoves = getAllBestCaptureMoves(board, color);
+    } else {
+      allowedMoves = allMoves;
+    }
   }
   const matchingMove = allowedMoves.find(
     (m) =>
@@ -1204,11 +1277,13 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   );
   if (!matchingMove) {
     showErrorMessage(
-      "Invalid move. Mayor Dama rule requires the highest-priority capture."
+      mustCaptureWithPiece
+        ? "Invalid move. You must continue capturing with the same piece."
+        : "Invalid move. Mayor Dama rule requires the highest-priority capture."
     );
     return;
   }
-  // ===== End Enforcement =====
+  // ===== End Validation =====
 
   let capturedPieces = [];
   if (matchingMove.isCapture) {
@@ -1271,109 +1346,106 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   );
   endSq.appendChild(piece);
 
-  // After moving the piece to endSq
-  let newPieceKey = pieceKey;
-
+  // Check for promotion
   const wasPromoted =
     (!isKing && color === "red" && endRow === 0) ||
     (!isKing && color === "blue" && endRow === 7);
-
   if (wasPromoted) {
-    // Promote by updating key and class
-    newPieceKey = pieceKey + "_king";
+    const newPieceKey = pieceKey + "_king";
     piece.classList.add("king");
     piece.dataset.pieceKey = newPieceKey;
-    const pieceData = PIECES[newPieceKey];
-    if (pieceData) {
-      piece.dataset.value = pieceData.value; // though same value
-    }
-    const moveData = {
-      type: "promotion",
-      player: color,
-      piece: pieceKey,
-    };
+    const moveData = { type: "promotion", player: color, piece: pieceKey };
     playSound("promotion");
     currentTurnMoveIds.push(moveData);
     appendMoveToHistoryDOM(moveData);
-    mustCaptureWithPiece = null;
-    switchTurn();
-    turnEnded = true;
-  } else if (capturedPieces.length > 0) {
-    setTimeout(() => {
-      const newBoard = createLogicalBoard();
-      const landedPiece = newBoard[endRow][endCol];
-      if (landedPiece && landedPiece.color === color) {
-        const furtherCaptures = getImmediateCaptures(
-          newBoard,
-          endRow,
-          endCol,
-          landedPiece
-        );
-        if (furtherCaptures.length > 0) {
-          mustCaptureWithPiece = piece;
-          if (gameMode === "pvai" && color === window.aiColor) {
-            setTimeout(() => {
-              // Re-enforce Mayor Dama: pick best among further captures
-              const newBoard = createLogicalBoard();
-              // Filter continuations from this piece
-              const continuations = furtherCaptures.filter(
-                (m) => m.startRow === endRow && m.startCol === endCol
-              );
-              let bestContinuation = null;
-              let bestScore = -Infinity;
-              for (const move of continuations) {
-                const capturer = newBoard[move.startRow][move.startCol];
-                const captured =
-                  newBoard[move.captured[0][0]][move.captured[0][1]];
-                const op = DAMATH_LAYOUT[move.endRow][move.endCol];
-                const score = calculateCaptureScoreSimulated(
-                  capturer.value,
-                  captured.value,
-                  capturer.isKing,
-                  captured.isKing,
-                  op
-                );
-                if (score > bestScore) {
-                  bestScore = score;
-                  bestContinuation = move;
-                }
-              }
-              if (bestContinuation) {
-                performMove(
-                  piece,
-                  bestContinuation.startRow,
-                  bestContinuation.startCol,
-                  bestContinuation.endRow,
-                  bestContinuation.endCol
-                );
-              } else {
-                // Fallback (should not happen)
-                performMove(
-                  piece,
-                  furtherCaptures[0].startRow,
-                  furtherCaptures[0].startCol,
-                  furtherCaptures[0].endRow,
-                  furtherCaptures[0].endCol
-                );
-              }
-            }, 500);
-          }
-        } else {
-          mustCaptureWithPiece = null;
-          switchTurn();
-          turnEnded = true;
-        }
-      } else {
-        mustCaptureWithPiece = null;
-        switchTurn();
-        turnEnded = true;
-      }
-    }, 0);
-  } else {
-    mustCaptureWithPiece = null;
-    switchTurn();
-    turnEnded = true;
   }
+
+  // ✅ CRITICAL: Only allow continuation if THIS MOVE was a capture
+  const newBoard = createLogicalBoard();
+  const landedPiece = newBoard[endRow][endCol];
+  let furtherCaptures = [];
+
+  // 👇 Only check for further captures if this turn has already captured
+  if (capturedPieces.length > 0 && landedPiece && landedPiece.color === color) {
+    furtherCaptures = getImmediateCaptures(
+      newBoard,
+      endRow,
+      endCol,
+      landedPiece
+    ).filter((move) => (move.endRow + move.endCol) % 2 === 0); // ✅ Only light squares
+  }
+
+  if (furtherCaptures.length > 0) {
+    mustCaptureWithPiece = piece;
+    if (gameMode === "pvai" && color === window.aiColor) {
+      // ✅ Enhanced AI continuation: maximize captures, then minimize score
+      let bestNext = null;
+      let bestChain = -1;
+      let bestScore = Infinity;
+
+      const currentPieceLogical = newBoard[endRow][endCol];
+
+      for (const move of furtherCaptures) {
+        // Simulate this jump
+        const testBoard = applyLogicalMove(newBoard, move);
+        const landed = testBoard[move.endRow][move.endCol];
+
+        // 1. Evaluate remaining chain length
+        const chainLength =
+          1 +
+          getMaxCaptureCount(
+            testBoard,
+            move.endRow,
+            move.endCol,
+            landed,
+            new Set()
+          );
+
+        // 2. Evaluate Sci-Damath score of THIS jump
+        const capturedLogical =
+          newBoard[move.captured[0][0]][move.captured[0][1]];
+        const op = DAMATH_LAYOUT[move.endRow][move.endCol];
+        const jumpScore = calculateCaptureScoreSimulated(
+          currentPieceLogical.value,
+          capturedLogical.value,
+          currentPieceLogical.isKing,
+          capturedLogical.isKing,
+          op
+        );
+
+        // 3. Compare: prioritize longer chains, then lower score
+        if (
+          chainLength > bestChain ||
+          (chainLength === bestChain && jumpScore < bestScore)
+        ) {
+          bestChain = chainLength;
+          bestScore = jumpScore;
+          bestNext = move;
+        }
+      }
+
+      const next = bestNext || furtherCaptures[0];
+      if (next) {
+        setTimeout(() => {
+          if (!gameOver) {
+            performMove(
+              piece,
+              next.startRow,
+              next.startCol,
+              next.endRow,
+              next.endCol
+            );
+          }
+        }, 600);
+        return;
+      }
+    }
+    // Human: wait for input — do nothing
+  }
+
+  // ✅ Always end turn if no valid continuation
+  mustCaptureWithPiece = null;
+  switchTurn();
 
   if (!replayMode) highlightMoveSquares(startRow, startCol, endRow, endCol);
   clearValidMoves();

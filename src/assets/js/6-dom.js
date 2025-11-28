@@ -86,16 +86,29 @@ function clearValidMoves() {
     });
 }
 
-function showValidMoves(piece, startRow, startCol) {
+function showValidMoves(startRow, startCol) {
   clearValidMoves();
   const board = createLogicalBoard();
-  const allMoves = generateAllMoves(board, currentPlayer);
-  const captureMoves = allMoves.filter((m) => m.isCapture);
+  let allowedMoves = [];
 
-  let allowedMoves = allMoves;
-  if (captureMoves.length > 0) {
-    // Enforce Mayor Dama: only show highest-priority captures
-    allowedMoves = getAllBestCaptureMoves(board, currentPlayer);
+  if (mustCaptureWithPiece) {
+    // Only show continuations from this piece
+    const landedPiece = board[startRow][startCol];
+    if (landedPiece && landedPiece.color === currentPlayer) {
+      allowedMoves = getImmediateCaptures(
+        board,
+        startRow,
+        startCol,
+        landedPiece
+      );
+    }
+  } else {
+    const allMoves = generateAllMoves(board, currentPlayer);
+    const captureMoves = allMoves.filter((m) => m.isCapture);
+    allowedMoves =
+      captureMoves.length > 0
+        ? getAllBestCaptureMoves(board, currentPlayer)
+        : allMoves;
   }
 
   const validEnds = new Set();

@@ -144,14 +144,17 @@ pvaiButtons.forEach(btn => {
   });
 });
 
-// assets/js/menu.js
-// REPLACE the existing difficulty button click handler with this:
-document.querySelectorAll(".difficulty-btn").forEach(btn => {
+document.querySelectorAll(".difficulty-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     const depth = parseInt(btn.getAttribute("ai-difficulty"), 10);
     const playerColorSelect = document.getElementById("player-color");
-    const humanColor = playerColorSelect ? playerColorSelect.value : "red";
-    
+    let humanColor = playerColorSelect ? playerColorSelect.value : "red";
+
+    // ✅ Handle "random" selection
+    if (humanColor === "random") {
+      humanColor = Math.random() < 0.5 ? "red" : "blue";
+    }
+
     if ([2, 3, 4, 6].includes(depth)) {
       localStorage.setItem("aiDepth", String(depth));
       localStorage.setItem("pvaiPlayerColor", humanColor);

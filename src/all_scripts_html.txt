@@ -119,12 +119,13 @@ File: ./index.html
     >
       <div class="modal-content">
         <div class="option-group">
-        <label for="player-color">Play as:</label>
-        <select id="player-color">
-          <option value="red">Red (First)</option>
-          <option value="blue">Blue (Second)</option>
-        </select>
-      </div>
+          <label for="player-color">Play as:</label>
+          <select id="player-color">
+            <option value="random">Random</option>
+            <option value="red">Red (First)</option>
+            <option value="blue">Blue (Second)</option>
+          </select>
+        </div>
         <h2 id="difficulty-title">Select Difficulty</h2>
         <p>How challenging should the AI be?</p>
         <div class="difficulty-options">
@@ -571,21 +572,13 @@ File: ./debug_mode/debug_mode.html
     </div>
 
     <!-- Game Over Modal -->
-    <div
-      id="game-over-modal"
-      class="modal"
-      hidden
-      role="dialog"
-      aria-labelledby="game-over-title"
-    >
-      <div class="modal-content game-over-content">
-        <div id="game-over-message" class="game-over-message">
-          <h2 id="game-over-title">Game Over</h2>
-          <div id="game-over-message"></div>
-          <div class="modal-buttons">
-            <button id="new-game-btn" class="btn-primary">New Game</button>
-            <button id="close-modal" class="btn-primary">Close</button>
-          </div>
+    <div id="game-over-modal" class="modal" hidden>
+      <div class="modal-content">
+        <h3>Game Over</h3>
+        <div id="game-over-message"></div>
+        <div class="modal-buttons">
+          <button id="new-game-btn" class="btn-primary">New Game</button>
+          <button id="close-modal" class="btn-primary">Close</button>
         </div>
       </div>
     </div>
@@ -738,21 +731,13 @@ File: ./pvp/sci-damath/pvp-integer-scidamath.html
     </div>
 
     <!-- Game Over Modal -->
-    <div
-      id="game-over-modal"
-      class="modal"
-      hidden
-      role="dialog"
-      aria-labelledby="game-over-title"
-    >
-      <div class="modal-content game-over-content">
-        <div id="game-over-message" class="game-over-message">
-          <h2 id="game-over-title">Game Over</h2>
-          <div id="game-over-message"></div>
-          <div class="modal-buttons">
-            <button id="new-game-btn" class="btn-primary">New Game</button>
-            <button id="close-modal" class="btn-primary">Close</button>
-          </div>
+    <div id="game-over-modal" class="modal" hidden>
+      <div class="modal-content">
+        <h3>Game Over</h3>
+        <div id="game-over-message"></div>
+        <div class="modal-buttons">
+          <button id="new-game-btn" class="btn-primary">New Game</button>
+          <button id="close-modal" class="btn-primary">Close</button>
         </div>
       </div>
     </div>

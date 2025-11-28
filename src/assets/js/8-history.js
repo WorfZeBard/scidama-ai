@@ -89,6 +89,8 @@ function undoMove() {
     showErrorMessage("No moves to undo.");
     return;
   }
+  // Since we're going back, the current turn hasn't captured yet
+  currentTurnHasCaptured = false;
 
   let stepsBack = 1;
   if (gameMode === "pvai") {
@@ -152,7 +154,7 @@ function undoMove() {
       if (!gameOver && currentPlayer === window.aiColor) {
         makeAIMove();
       }
-    }, 750);
+    }, 1500);
   }
 }
 
