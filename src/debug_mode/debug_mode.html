@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="../assets/css/styles.css" />
     <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
   </head>
-  <body>
+  <body class="debug-mode">
     <!-- Game Screen -->
     <main id="game-screen" class="game-screen" tabindex="-1">
       <div class="game-container">
@@ -40,21 +40,31 @@
                 <div class="current-turn-label" data-player="red">
                   Current Turn: <span id="current-turn"></span>
                 </div>
-                <div class="timer-wrapper">
-                  <label for="ai-difficulty" class="timer-label"
-                    >Change AI:</label
-                  >
-                  <select id="ai-difficulty">
-                    <option value="2">Easy</option>
-                    <option value="3">Medium</option>
-                    <option value="4">Hard</option>
-                    <option value="6">Expert</option>
-                  </select>
-                </div>
-                <div class="ai-difficulty-label">
-                  AI Difficulty: <span id="ai-difficulty-display"></span>
-                </div>
               </section>
+
+              <!-- Human Color Section -->
+              <div class="option-group">
+                <label for="human-color" class="timer-label">Human Color</label>
+                <select id="human-color">
+                  <option value="red">Red (First)</option>
+                  <option value="blue">Blue (Second)</option>
+                </select>
+              </div>
+              
+              <!-- AI Difficulty Section -->
+              <div class="option-group">
+                <label for="ai-difficulty" class="timer-label">AI Difficulty</label>
+                <select id="ai-difficulty">
+                  <option value="2">Easy</option>
+                  <option value="3">Medium</option>
+                  <option value="4">Hard</option>
+                  <option value="6">Expert</option>
+                </select>
+              </div>
+
+              <div class="ai-difficulty-label">
+                AI Difficulty: <span id="ai-difficulty-display"></span>
+              </div>
             </aside>
 
             <!-- Gameboard -->

@@ -1,69 +1,56 @@
-function saveBoardState() {
-  const state = {
-    redScore,
-    blueScore,
-    currentPlayer,
-    mustCaptureWithPiece: mustCaptureWithPiece
-      ? {
-          row: parseInt(mustCaptureWithPiece.parentElement.dataset.row),
-          col: parseInt(mustCaptureWithPiece.parentElement.dataset.col),
-        }
-      : null,
-    pieces: [],
-  };
-  document.querySelectorAll(".piece").forEach((piece) => {
-    const square = piece.parentElement;
-    const pieceKey = piece.dataset.pieceKey;
-    if (!pieceKey || !PIECES[pieceKey]) {
-      console.warn("Piece missing valid data-piece-key:", piece);
-      return;
-    }
-    state.pieces.push({
-      key: pieceKey,
-      row: parseInt(square.dataset.row),
-      col: parseInt(square.dataset.col),
-      isKing: piece.classList.contains("king"),
-      value: piece.dataset.value,
-    });
-  });
-  return state;
-}
-
 function restoreBoardState(state) {
+  // Clear all existing pieces from the board
   document.querySelectorAll(".piece").forEach((p) => p.remove());
+
+  // Restore pieces from saved state
   state.pieces.forEach((pieceData) => {
     const square = document.querySelector(
       `.square[data-row='${pieceData.row}'][data-col='${pieceData.col}']`
     );
     if (!square) return;
+
     const pieceDataConfig = PIECES[pieceData.key];
     if (!pieceDataConfig) {
       console.warn("Unknown piece key in restore:", pieceData.key);
       return;
     }
+
     const piece = document.createElement("div");
     piece.classList.add("piece", pieceDataConfig.color);
-    piece.dataset.pieceKey = pieceData.key; // ✅
+    piece.dataset.pieceKey = pieceData.key;
     piece.dataset.value = pieceData.value;
     if (pieceData.isKing) piece.classList.add("king");
     piece.draggable = true;
     piece.tabIndex = 0;
+
     const numberLabel = document.createElement("span");
     numberLabel.classList.add("piece-number");
     numberLabel.textContent = pieceData.value;
     piece.appendChild(numberLabel);
+
     square.appendChild(piece);
   });
+
+  // Restore scores
   redScore = state.redScore;
   blueScore = state.blueScore;
-  currentPlayer = state.currentPlayer;
   redScoreEl.textContent = redScore.toFixed(2);
   blueScoreEl.textContent = blueScore.toFixed(2);
-  currentPlayerEl.textContent = currentPlayer;
+
+  // Restore current player
+  currentPlayer = state.currentPlayer;
+  let displayPlayerText = currentPlayer;
+  if (gameMode === "pvai") {
+    displayPlayerText = currentPlayer === window.aiColor ? "AI" : "Human";
+  }
+  currentPlayerEl.textContent = displayPlayerText;
+
   const currentPlayerLabel = document.querySelector(".current-turn-label");
   if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   }
+
+  // Restore mustCaptureWithPiece
   mustCaptureWithPiece = null;
   if (state.mustCaptureWithPiece) {
     const { row, col } = state.mustCaptureWithPiece;
@@ -72,7 +59,21 @@ function restoreBoardState(state) {
     );
     if (square) mustCaptureWithPiece = square.querySelector(".piece");
   }
+
+  // ✅ RESTORE BOARD ROTATION STATE (for PvP mode)
+  const boardWrapper = document.querySelector(".board-wrapper");
+  if (boardWrapper) {
+    if (state.boardRotated) {
+      boardWrapper.classList.add("rotated");
+    } else {
+      boardWrapper.classList.remove("rotated");
+    }
+  }
+
+  // Clear UI indicators
   clearValidMoves();
+
+  // Restart round timer (unless in replay)
   if (!replayMode) {
     if (roundInterval) clearInterval(roundInterval);
     roundMinutes = 1;

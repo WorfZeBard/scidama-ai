@@ -262,6 +262,42 @@ function updateTurnHistoryDOM() {
   }
 }
 
+function saveBoardState() {
+  // Get rotation state from DOM
+  const boardWrapper = document.querySelector(".board-wrapper");
+  const state = {
+    redScore,
+    blueScore,
+    currentPlayer,
+    mustCaptureWithPiece: mustCaptureWithPiece
+      ? {
+          row: parseInt(mustCaptureWithPiece.parentElement.dataset.row, 10),
+          col: parseInt(mustCaptureWithPiece.parentElement.dataset.col, 10),
+        }
+      : null,
+    boardRotated: boardWrapper
+      ? boardWrapper.classList.contains("rotated")
+      : false,
+    pieces: [],
+  };
+  document.querySelectorAll(".piece").forEach((piece) => {
+    const square = piece.parentElement;
+    const pieceKey = piece.dataset.pieceKey;
+    if (!pieceKey || !PIECES[pieceKey]) {
+      console.warn("Piece missing valid data-piece-key:", piece);
+      return;
+    }
+    state.pieces.push({
+      key: pieceKey,
+      row: parseInt(square.dataset.row, 10),
+      col: parseInt(square.dataset.col, 10),
+      isKing: piece.classList.contains("king"),
+      value: piece.dataset.value,
+    });
+  });
+  return state;
+}
+
 function placeInitialPieces() {
   // Ensure board DOM exists
   if (!gameboard || gameboard.children.length === 0) {
@@ -273,12 +309,15 @@ function placeInitialPieces() {
 
   let setup = debugMode ? DEBUG_SETUP : INITIAL_SETUP;
 
-  // Swap setup if human is blue (PVAI mode)
-  if (gameMode === "pvai" && window.humanColor === "blue") {
+  // Swap setup if human is blue (PVAI mode) — but NOT in Debug Mode
+  if (
+    gameMode === "pvai" &&
+    window.humanColor === "blue" &&
+    !window.debugMode
+  ) {
     const swappedSetup = {};
     for (const [pos, pieceKey] of Object.entries(setup)) {
       const [r, c] = pos.split(",").map(Number);
-      // ✅ FLIP BOTH ROW AND COLUMN to preserve light-square parity
       const newPos = `${7 - r},${7 - c}`;
       let newKey = pieceKey;
       if (pieceKey.startsWith("r")) {
@@ -493,7 +532,12 @@ function resetGame() {
   // After placeInitialPieces()
   const boardWrapper = document.querySelector(".board-wrapper");
   if (boardWrapper) {
-    if (gameMode === "pvai" && window.humanColor === "blue") {
+    // Apply board rotation ONLY in regular PvAI mode, NOT in Debug Mode
+    if (
+      gameMode === "pvai" &&
+      !window.debugMode &&
+      window.humanColor === "blue"
+    ) {
       boardWrapper.classList.add("rotated");
     } else {
       boardWrapper.classList.remove("rotated");
@@ -506,6 +550,11 @@ function resetGame() {
         makeAIMove();
       }
     }, 1500);
+  }
+
+  if (boardWrapper && gameMode === "pvp") {
+    // Red always starts → no rotation
+    boardWrapper.classList.remove("rotated");
   }
 }
 
@@ -1063,11 +1112,20 @@ function switchTurn() {
   currentTurnHasCaptured = false;
   mustCaptureWithPiece = null;
   currentPlayer = currentPlayer === "red" ? "blue" : "red";
-  currentPlayerEl.textContent = currentPlayer;
+
+  // Update UI player display
+  let displayPlayer = currentPlayer;
+  if (gameMode === "pvai") {
+    displayPlayer = currentPlayer === window.humanColor ? "Human" : "AI";
+  }
+  currentPlayerEl.textContent = displayPlayer;
+
   const currentPlayerLabel = document.querySelector(".current-turn-label");
   if (currentPlayerLabel) {
     currentPlayerLabel.setAttribute("data-player", currentPlayer);
   }
+
+  // Restart round timer
   if (roundInterval) clearInterval(roundInterval);
   roundMinutes = 1;
   roundSeconds = 0;
@@ -1075,31 +1133,34 @@ function switchTurn() {
   roundEl.classList.add(currentPlayer === "red" ? "timer-red" : "timer-blue");
   startRoundTimer();
 
-  // ✅ Record full turn data including moves
+  // ✅ Record turn in history
   const lastPlayer = currentPlayer === "blue" ? "red" : "blue";
   const currentState = saveBoardState();
   const turnEntry = {
     player: lastPlayer,
     endState: currentState,
-    moves: [...currentTurnMoveIds], // 👈 CRITICAL: persist the moves
+    moves: [...currentTurnMoveIds],
   };
-
   turnHistory = turnHistory.slice(0, currentTurnIndex + 1);
   turnHistory.push(turnEntry);
   currentTurnIndex++;
-
-  // ✅ Clear for next turn
   currentTurnMoveIds = [];
+  updateTurnHistoryDOM();
 
-  // ✅ Update history display
-  updateTurnHistoryDOM(); // ←←← ADD THIS
-
-  let displayPlayer = currentPlayer;
-  if (gameMode === "pvai") {
-    displayPlayer = currentPlayer === window.humanColor ? "Human" : "AI";
+  // ✅ AUTO-ROTATE BOARD IN PvP MODE
+  if (gameMode === "pvp") {
+    const boardWrapper = document.querySelector(".board-wrapper");
+    if (boardWrapper) {
+      // Rotate if it's BLUE's turn, unrotate if RED's
+      if (currentPlayer === "blue") {
+        boardWrapper.classList.add("rotated");
+      } else {
+        boardWrapper.classList.remove("rotated");
+      }
+    }
   }
-  currentPlayerEl.textContent = displayPlayer;
 
+  // Handle AI move (only in pvai mode)
   if (gameMode === "pvai" && currentPlayer === window.aiColor) {
     setTimeout(() => makeAIMove(), 1500);
   }
@@ -1246,7 +1307,6 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
   // ===== MOVE VALIDATION (with forced capture handling) =====
   let allowedMoves = [];
   if (mustCaptureWithPiece) {
-    // 🔒 Mid-chain: ONLY allow further captures from this piece
     const currentPiece = board[startRow][startCol];
     if (!currentPiece || currentPiece.color !== color) {
       showErrorMessage("Invalid piece for continuation.");
@@ -1259,7 +1319,6 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       currentPiece
     );
   } else {
-    // 🌍 Start of turn: full Mayor Dama enforcement
     const allMoves = generateAllMoves(board, color);
     const captureMoves = allMoves.filter((m) => m.isCapture);
     if (captureMoves.length > 0) {
@@ -1268,6 +1327,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
       allowedMoves = allMoves;
     }
   }
+
   const matchingMove = allowedMoves.find(
     (m) =>
       m.startRow === startRow &&
@@ -1283,8 +1343,8 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     );
     return;
   }
-  // ===== End Validation =====
 
+  // ===== Execute Move =====
   let capturedPieces = [];
   if (matchingMove.isCapture) {
     capturedPieces = matchingMove.captured
@@ -1306,6 +1366,7 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     else blueScore += scoreChange;
     redScoreEl.textContent = redScore.toFixed(2);
     blueScoreEl.textContent = blueScore.toFixed(2);
+
     const moveData = {
       type: "capture",
       player: color,
@@ -1360,37 +1421,58 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
     appendMoveToHistoryDOM(moveData);
   }
 
-  // ✅ CRITICAL: Only allow continuation if THIS MOVE was a capture
+  // ===== Multi-capture continuation logic =====
   const newBoard = createLogicalBoard();
   const landedPiece = newBoard[endRow][endCol];
   let furtherCaptures = [];
 
-  // 👇 Only check for further captures if this turn has already captured
   if (capturedPieces.length > 0 && landedPiece && landedPiece.color === color) {
-    furtherCaptures = getImmediateCaptures(
+    const allImmediate = getImmediateCaptures(
       newBoard,
       endRow,
       endCol,
       landedPiece
-    ).filter((move) => (move.endRow + move.endCol) % 2 === 0); // ✅ Only light squares
+    ).filter((move) => (move.endRow + move.endCol) % 2 === 0);
+
+    // If there are multiple immediate options, apply Mayor Dama rule:
+    // Only keep moves that lead to the MAXIMUM total capture count.
+    if (allImmediate.length > 0) {
+      let maxChain = 0;
+      const moveChains = allImmediate.map((move) => {
+        const testBoard = applyLogicalMove(newBoard, move);
+        const landed = testBoard[move.endRow][move.endCol];
+        const chain =
+          1 +
+          getMaxCaptureCount(
+            testBoard,
+            move.endRow,
+            move.endCol,
+            landed,
+            new Set()
+          );
+        maxChain = Math.max(maxChain, chain);
+        return { move, chain };
+      });
+      // Keep only moves with max chain length
+      furtherCaptures = moveChains
+        .filter(({ chain }) => chain === maxChain)
+        .map(({ move }) => move);
+    }
   }
 
   if (furtherCaptures.length > 0) {
     mustCaptureWithPiece = piece;
+
+    // === AI Continuation ===
     if (gameMode === "pvai" && color === window.aiColor) {
-      // ✅ Enhanced AI continuation: maximize captures, then minimize score
       let bestNext = null;
       let bestChain = -1;
       let bestScore = Infinity;
-
       const currentPieceLogical = newBoard[endRow][endCol];
 
       for (const move of furtherCaptures) {
-        // Simulate this jump
         const testBoard = applyLogicalMove(newBoard, move);
         const landed = testBoard[move.endRow][move.endCol];
-
-        // 1. Evaluate remaining chain length
         const chainLength =
           1 +
           getMaxCaptureCount(
@@ -1400,8 +1482,6 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
             landed,
             new Set()
           );
-
-        // 2. Evaluate Sci-Damath score of THIS jump
         const capturedLogical =
           newBoard[move.captured[0][0]][move.captured[0][1]];
         const op = DAMATH_LAYOUT[move.endRow][move.endCol];
@@ -1413,7 +1493,6 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
           op
         );
 
-        // 3. Compare: prioritize longer chains, then lower score
         if (
           chainLength > bestChain ||
           (chainLength === bestChain && jumpScore < bestScore)
@@ -1440,21 +1519,37 @@ function performMove(piece, startRow, startCol, endRow, endCol) {
         return;
       }
     }
-    // Human: wait for input — do nothing
+
+    // === Human Continuation ===
+    // Re-highlight valid next moves so player sees fork options
+    setTimeout(() => {
+      if (
+        !gameOver &&
+        !replayMode &&
+        (!gameMode || gameMode !== "pvai" || color !== window.aiColor)
+      ) {
+        showValidMoves(endRow, endCol);
+      }
+    }, 300);
+
+    clearValidMoves(); // clear old highlights first
+    return; // DO NOT end turn
   }
 
-  // ✅ Always end turn if no valid continuation
+  // No further captures → end turn
   mustCaptureWithPiece = null;
   switchTurn();
 
   if (!replayMode) highlightMoveSquares(startRow, startCol, endRow, endCol);
   clearValidMoves();
+
   if (!timersStarted) {
     timersStarted = true;
     startSessionTimer();
     startRoundTimer();
     playSound("gameStart");
   }
+
   setTimeout(() => checkGameOver(), 100);
 }
 

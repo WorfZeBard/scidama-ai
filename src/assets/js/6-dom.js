@@ -84,6 +84,7 @@ function clearValidMoves() {
     .forEach((sq) => {
       sq.classList.remove("valid-move", "piece-dragging");
     });
+  autoHighlightedCaptureMoves = [];
 }
 
 function showValidMoves(startRow, startCol) {
@@ -95,12 +96,35 @@ function showValidMoves(startRow, startCol) {
     // Only show continuations from this piece
     const landedPiece = board[startRow][startCol];
     if (landedPiece && landedPiece.color === currentPlayer) {
-      allowedMoves = getImmediateCaptures(
+      const allImmediate = getImmediateCaptures(
         board,
         startRow,
         startCol,
         landedPiece
-      );
+      ).filter((move) => (move.endRow + move.endCol) % 2 === 0);
+      if (allImmediate.length === 0) {
+        allowedMoves = [];
+      } else {
+        let maxChain = 0;
+        const moveChains = allImmediate.map((move) => {
+          const testBoard = applyLogicalMove(board, move);
+          const landed = testBoard[move.endRow][move.endCol];
+          const chain =
+            1 +
+            getMaxCaptureCount(
+              testBoard,
+              move.endRow,
+              move.endCol,
+              landed,
+              new Set()
+            );
+          maxChain = Math.max(maxChain, chain);
+          return { move, chain };
+        });
+        allowedMoves = moveChains
+          .filter(({ chain }) => chain === maxChain)
+          .map(({ move }) => move);
+      }
     }
   } else {
     const allMoves = generateAllMoves(board, currentPlayer);
@@ -125,6 +149,46 @@ function showValidMoves(startRow, startCol) {
           `.square[data-row='${r}'][data-col='${c}']`
         );
         if (sq) sq.classList.add("valid-move");
+      }
+    }
+  }
+}
+
+function autoHighlightHumanCaptures() {
+  if (replayMode || gameOver) return;
+  if (gameMode === "pvai" && currentPlayer === window.aiColor) return;
+  if (mustCaptureWithPiece) {
+    const sq = mustCaptureWithPiece.parentElement;
+    const r = parseInt(sq.dataset.row, 10);
+    const c = parseInt(sq.dataset.col, 10);
+    showValidMoves(r, c);
+    return;
+  }
+
+  autoHighlightedCaptureMoves = []; // reset
+  const board = createLogicalBoard();
+  const allMoves = generateAllMoves(board, currentPlayer);
+  const captureMoves = allMoves.filter((m) => m.isCapture);
+
+  if (captureMoves.length > 0) {
+    const bestMoves = getAllBestCaptureMoves(board, currentPlayer);
+    autoHighlightedCaptureMoves = bestMoves;
+
+    // Highlight all valid destinations
+    const validEnds = new Set();
+    for (const m of bestMoves) {
+      validEnds.add(`${m.endRow},${m.endCol}`);
+    }
+
+    // Apply highlight
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const sq = document.querySelector(
+          `.square[data-row='${r}'][data-col='${c}']`
+        );
+        if (sq && validEnds.has(`${r},${c}`)) {
+          sq.classList.add("valid-move");
+        }
       }
     }
   }

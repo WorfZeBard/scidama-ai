@@ -42,14 +42,14 @@ function handleBoardClick(e) {
     showErrorMessage("It's the AI's turn.");
     return;
   }
-
   const square = e.target.closest(".square");
   if (!square || !square.classList.contains("playable")) return;
 
-  // If a forced capture is active, only that piece matters
+  const endRow = parseInt(square.dataset.row, 10);
+  const endCol = parseInt(square.dataset.col, 10);
+
+  // ===== CASE 1: Forced multi-capture =====
   if (mustCaptureWithPiece) {
-    const endRow = parseInt(square.dataset.row, 10);
-    const endCol = parseInt(square.dataset.col, 10);
     const startSq = mustCaptureWithPiece.parentElement;
     const startRow = parseInt(startSq.dataset.row, 10);
     const startCol = parseInt(startSq.dataset.col, 10);
@@ -57,9 +57,32 @@ function handleBoardClick(e) {
     return;
   }
 
+  // ===== CASE 2: Auto-highlighted capture destination clicked =====
+  if (autoHighlightedCaptureMoves.length > 0) {
+    const matchingMove = autoHighlightedCaptureMoves.find(
+      (m) => m.endRow === endRow && m.endCol === endCol
+    );
+    if (matchingMove) {
+      const piece = findPieceInDOM(
+        matchingMove.startRow,
+        matchingMove.startCol
+      );
+      if (piece) {
+        performMove(
+          piece,
+          matchingMove.startRow,
+          matchingMove.startCol,
+          endRow,
+          endCol
+        );
+        return;
+      }
+    }
+  }
+
+  // ===== CASE 3: Normal selection (fallback) =====
   const piece = e.target.closest(".piece");
   if (piece && piece.classList.contains(currentPlayer)) {
-    // Normal selection (only if no forced capture)
     document
       .querySelectorAll(".square.piece-selected")
       .forEach((sq) => sq.classList.remove("piece-selected"));
@@ -71,12 +94,11 @@ function handleBoardClick(e) {
     return;
   }
 
+  // ===== CASE 4: Move with pre-selected piece =====
   if (selectedPiece && square) {
     const startSq = selectedPiece.parentElement;
     const startRow = parseInt(startSq.dataset.row, 10);
     const startCol = parseInt(startSq.dataset.col, 10);
-    const endRow = parseInt(square.dataset.row, 10);
-    const endCol = parseInt(square.dataset.col, 10);
     performMove(selectedPiece, startRow, startCol, endRow, endCol);
     selectedPiece = null;
     clearValidMoves();

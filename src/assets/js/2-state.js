@@ -38,3 +38,4 @@ let finalBlue = 0.0;
 let actualMoveCount = 0;
 let currentTurnHasCaptured = false;
 let aiIsInMultiJump = false;
+let autoHighlightedCaptureMoves = [];   

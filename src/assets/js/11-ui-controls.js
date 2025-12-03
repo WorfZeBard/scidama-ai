@@ -73,6 +73,21 @@ function setupDebugControls() {
     });
   }
 
+  // Human Color selector (Debug Mode only)
+  const humanColorSelect = document.getElementById("human-color");
+  if (humanColorSelect) {
+    const savedHumanColor = localStorage.getItem("pvaiPlayerColor") || "red";
+    humanColorSelect.value = savedHumanColor;
+
+    humanColorSelect.addEventListener("change", (e) => {
+      const newColor = e.target.value;
+      localStorage.setItem("pvaiPlayerColor", newColor);
+      window.humanColor = newColor;
+      window.aiColor = newColor === "red" ? "blue" : "red";
+      resetGame(); // board resets, but NO rotation in debug mode (already handled)
+    });
+  }
+
   if (toggle) {
     toggle.addEventListener("click", () => {
       debugMode = !debugMode;
